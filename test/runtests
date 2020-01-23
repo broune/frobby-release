@@ -1,0 +1,63 @@
+#!/bin/bash
+
+TIMEFORMAT=$' (%2lR real)'
+
+echo -n "decom (slice, split=label): "
+cd test/decom
+time ./runtests -slice on -split label
+cd ../..
+
+echo -n "decom (slice, split=midart): "
+cd test/decom
+time ./runtests -slice on -split midart
+cd ../..
+
+echo -n "decom (label): "
+cd test/decom
+time ./runtests -slice off -independence off
+cd ../..
+
+echo -n "frob (slice, split=midart): "
+cd test/frob
+time ./runtests -slice on -split midart
+cd ../..
+
+echo -n "frob (slice, split=frob): "
+cd test/frob
+time ./runtests -slice on -split frob
+cd ../..
+
+echo -n "frob (label): "
+cd test/frob
+time ./runtests -slice off
+cd ../..
+
+echo -n "intersect: "
+cd test/intersect
+time ./runtests
+cd ../..
+
+echo -n "assprimes: "
+cd test/assprimes
+time ./runtests
+cd ../..
+
+echo -n "minimize: "
+cd test/minimize
+time ./runtests
+cd ../..
+
+echo -n "format: "
+cd test/format
+time ./runtests
+cd ../..
+
+echo -n "latformat: "
+cd test/latformat
+time ./runtests
+cd ../..
+
+echo -n "alexdual: "
+cd test/alexdual
+time ./runtests
+cd ../..

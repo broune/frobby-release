@@ -1,0 +1,15 @@
+#!/bin/bash
+
+while true
+do
+  ./makerandom
+  ./runtest random
+
+  if [ $? != 0 ]
+  then
+    mv random $1
+    mv random.out.gro $1.out.gro
+    mv random.ref $1.ref
+    exit 1
+  fi
+done

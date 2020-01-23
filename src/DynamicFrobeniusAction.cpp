@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "DynamicFrobeniusAction.h"
 
@@ -22,24 +21,17 @@
 #include "DynamicFrobeniusFacade.h"
 #include "Scanner.h"
 
-const char* DynamicFrobeniusAction::getName() const {
-  return "frobdyn";
-}
-
-const char* DynamicFrobeniusAction::getShortDescription() const {
-  return "Compute Frobenius number using a dynamic programming algorithm.";
-}
-
-const char* DynamicFrobeniusAction::getDescription() const {
-  return
-"Compute the Frobenius number of the input Frobenius instance using a simple\n"
-"and quite slow dynamic programming algorithm. This functionality has mainly\n"
-"been implemented to check the answers of the Grobner basis-based Frobenius\n"
-"solver.";
-}
-
-Action* DynamicFrobeniusAction::createNew() const {
-  return new DynamicFrobeniusAction();
+DynamicFrobeniusAction::DynamicFrobeniusAction():
+  Action
+(staticGetName(),
+ "Compute Frobenius number using dynamic programming.",
+ "Compute the Frobenius number of the input Frobenius instance using a "
+ "simple\n"
+ "and quite slow dynamic programming algorithm. This functionality has "
+ "mainly\n"
+ "been implemented to check the answers of the Grobner basis-based Frobenius\n"
+ "solver.",
+ false) {
 }
 
 void DynamicFrobeniusAction::obtainParameters(vector<Parameter*>& parameters) {
@@ -52,6 +44,7 @@ void DynamicFrobeniusAction::perform() {
   IOFacade ioFacade(_printActions);
   Scanner in("", stdin);
   ioFacade.readFrobeniusInstance(in, instance);
+  in.expectEOF();
 
   mpz_class frobeniusNumber;
 
@@ -59,4 +52,8 @@ void DynamicFrobeniusAction::perform() {
   frobeniusFacade.computeFrobeniusNumber(instance, frobeniusNumber);
 
   gmp_fprintf(stdout, "%Zd\n", frobeniusNumber.get_mpz_t());
+}
+
+const char* DynamicFrobeniusAction::staticGetName() {
+  return "frobdyn";
 }

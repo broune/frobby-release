@@ -1,0 +1,11 @@
+#!/bin/bash
+
+testName="$1"
+shift
+
+inputFile="$testName.test"
+params="$*"
+
+outputFile="$testName.irrdecom"
+../testhelper irrdecom $inputFile $outputFile $params -encode -canon
+if [ $? != 0 ]; then exit 1; fi

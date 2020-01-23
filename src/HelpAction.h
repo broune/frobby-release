@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,36 +11,31 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef HELP_ACTION_GUARD
 #define HELP_ACTION_GUARD
 
 #include "Action.h"
+#include <string>
 
 class HelpAction : public Action {
  public:
   HelpAction();
-
-  virtual const char* getName() const;
-  virtual const char* getShortDescription() const;
-  virtual const char* getDescription() const;
-
   virtual void obtainParameters(vector<Parameter*>& parameters);
 
-  virtual bool acceptsNonParameter() const;
-  virtual bool processNonParameter(const char* str);
-
-  virtual Action* createNew() const;
+  virtual void processNonParameter(const char* str);
 
   virtual void perform();
 
- private:
-  void displayTopic();
+  static const char* staticGetName();
 
-  Action* _topic;
+ private:
+  void displayActionHelp(Action* action);
+  void displayIOHelp();
+
+  string _topic;
 };
 
 #endif

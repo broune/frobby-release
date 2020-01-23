@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,59 +11,62 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "AssociatedPrimesAction.h"
 
 #include "BigIdeal.h"
 #include "IOFacade.h"
-#include "AssociatedPrimesFacade.h"
-#include "IrreducibleDecomParameters.h"
+#include "SliceFacade.h"
+#include "SliceParameters.h"
 #include "Scanner.h"
+#include "BigTermConsumer.h"
+#include "DataType.h"
 
-AssociatedPrimesAction::AssociatedPrimesAction() {
-}
+AssociatedPrimesAction::AssociatedPrimesAction():
+  Action
+(staticGetName(),
+ "Compute the associated primes of the input ideal.",
+ "Computes the associated prime ideals of the input monomial ideal. The\n"
+ "computation is accomplished using irreducible decomposition. The quality "
+ "of the\n"
+ "algorithm for computing associated primes is expected to be much improved "
+ "in a\n"
+ "future version of Frobby.",
+ false),
 
-const char* AssociatedPrimesAction::getName() const {
-  return "assoprimes";
-}
-
-const char* AssociatedPrimesAction::getShortDescription() const {
-  return "Compute the associated primes of the input ideal.";
-}
-
-const char* AssociatedPrimesAction::getDescription() const {
-  return
-"Computes the associated prime ideals of the input monomial ideal. The\n"
-"computation is accomplished using irreducible decomposition. The quality of the\n"
-"algorithm for computing associated primes is expected to be much improved in a\n"
-"future version of Frobby.";
-}
-
-Action* AssociatedPrimesAction::createNew() const {
-  return new AssociatedPrimesAction();
+  _io(DataType::getMonomialIdealType(), DataType::getMonomialIdealType()) {
 }
 
 void AssociatedPrimesAction::obtainParameters(vector<Parameter*>& parameters) {
-  Action::obtainParameters(parameters);
   _io.obtainParameters(parameters);
+  _sliceParams.obtainParameters(parameters);
+  Action::obtainParameters(parameters);
 }
 
 void AssociatedPrimesAction::perform() {
-  Scanner in(_io.getInputFormat(), stdin);
-  _io.autoDetectInputFormat(in);
-  _io.validateFormats();
- 
+  _sliceParams.validateSplit(true, false);
+
   BigIdeal ideal;
 
-  IOFacade ioFacade(_printActions);
-  ioFacade.readIdeal(in, ideal);
+  {
+	Scanner in(_io.getInputFormat(), stdin);
+	_io.autoDetectInputFormat(in);
+	_io.validateFormats();
+	
+	IOFacade ioFacade(_printActions);
+	ioFacade.readIdeal(in, ideal);
+	in.expectEOF();
+  }
 
-  AssociatedPrimesFacade facade(_printActions);
+  auto_ptr<IOHandler> output = _io.createOutputHandler();
+  SliceFacade facade(ideal, output.get(), stdout, _printActions);
+  _sliceParams.apply(facade);
+  facade.computeAssociatedPrimes();
+}
 
-  facade.computeAPUsingIrrDecom(ideal, _decomParameters, stdout,
-								_io.getOutputFormat());
+const char* AssociatedPrimesAction::staticGetName() {
+  return "assoprimes";
 }

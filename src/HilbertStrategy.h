@@ -1,0 +1,69 @@
+/* Frobby: Software for monomial ideal computations.
+   Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
+#ifndef HILBERT_STRATEGY_GUARD
+#define HILBERT_STRATEGY_GUARD
+
+#include <vector>
+#include "IndependenceSplitter.h"
+#include "SliceStrategyCommon.h"
+#include "ElementDeleter.h"
+#include "HilbertIndependenceConsumer.h"
+
+class HilbertSlice;
+class Ideal;
+class CoefTermConsumer;
+class SliceEvent;
+class Slice;
+class SplitStrategy;
+
+class HilbertStrategy : public SliceStrategyCommon {
+ public:
+  HilbertStrategy(CoefTermConsumer* consumer,
+				  const SplitStrategy* splitStrategy);
+
+  virtual auto_ptr<Slice> beginComputing(const Ideal& ideal);
+  virtual void doneComputing();
+
+  virtual void split(auto_ptr<Slice> slice,
+					 SliceEvent*& leftEvent, auto_ptr<Slice>& leftSlice,
+					 SliceEvent*& rightEvent, auto_ptr<Slice>& rightSlice);
+
+  void freeConsumer(auto_ptr<HilbertIndependenceConsumer> consumer);
+
+ private:
+  auto_ptr<HilbertIndependenceConsumer> newConsumer();
+
+  auto_ptr<HilbertSlice> newHilbertSlice();
+  virtual auto_ptr<Slice> allocateSlice();
+  virtual bool debugIsValidSlice(Slice* slice);
+
+  virtual void getPivot(Term& term, Slice& slice);
+
+  IndependenceSplitter _indepSplitter;
+  void independenceSplit(auto_ptr<HilbertSlice> slice,
+						 SliceEvent*& leftEvent,
+						 auto_ptr<Slice>& leftSlice,
+						 auto_ptr<Slice>& rightSlice);
+
+  vector<HilbertIndependenceConsumer*> _consumerCache;
+  ElementDeleter<vector<HilbertIndependenceConsumer*> > _consumerCacheDeleter;
+
+  CoefTermConsumer* _consumer;
+  bool _useIndependence;
+};
+
+#endif

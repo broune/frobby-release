@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,14 +11,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "GenerateDataFacade.h"
 
 #include "randomDataGenerators.h"
+#include "error.h"
 
 GenerateDataFacade::GenerateDataFacade(bool printActions):
   Facade(printActions) {
@@ -62,8 +62,8 @@ void GenerateDataFacade::generateIdeal(BigIdeal& ideal,
 	::generateRandomIdeal(ideal, exponentRange, variableCount, generatorCount);
 
   if (!fullSize)
-	fputs("NOTE: Generated ideal has fewer minimal "
-		  "generators than requested.\n", stderr);
+	displayNote("Generated ideal has fewer minimal "
+				"generators than requested.\n");
 
   endAction();  
 }

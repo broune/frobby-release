@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef TERM_GUARD
 #define TERM_GUARD
 
@@ -26,6 +25,9 @@
 inline void product(Exponent* res,
 		    const Exponent* a, const Exponent* b,
 		    size_t varCount) {
+  ASSERT(res != 0 || varCount == 0);
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var)
     res[var] = a[var] + b[var];
 }
@@ -36,6 +38,9 @@ inline void product(Exponent* res,
 inline void colon(Exponent* res,
 				  const Exponent* a, const Exponent* b,
 				  size_t varCount) {
+  ASSERT(res != 0 || varCount == 0);
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var) {
     if (a[var] > b[var])
       res[var] = a[var] - b[var];
@@ -44,7 +49,26 @@ inline void colon(Exponent* res,
   }
 }
 
+// dualOf encodes an irreducible ideal as a term, and the dual of that in
+// point is a principal ideal of which res will be the generator. This
+// requires that dualOf divides point, as otherwise that dual is not defined.
+inline void encodedDual(Exponent* res,
+                        const Exponent* dualOf, const Exponent* point,
+                        size_t varCount) {
+  ASSERT(res != 0 || varCount == 0);
+  ASSERT(dualOf != 0 || varCount == 0);
+  ASSERT(point != 0 || varCount == 0);
+  for (size_t var = 0; var < varCount; ++var) {
+    ASSERT(dualOf[var] <= point[var]);
+    if (dualOf[var] != 0)
+      res[var] = point[var] - dualOf[var] + 1;
+    else
+      res[var] = 0;
+  }
+}
+
 inline void decrement(Exponent* a, size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var)
 	if (a[var] > 0)
 	  a[var] -= 1;
@@ -54,6 +78,9 @@ inline void decrement(Exponent* a, size_t varCount) {
 inline void gcd(Exponent* res,
 				const Exponent* a, const Exponent* b,
 				size_t varCount) {
+  ASSERT(res != 0 || varCount == 0);
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var) {
     if (a[var] < b[var])
       res[var] = a[var];
@@ -66,6 +93,9 @@ inline void gcd(Exponent* res,
 inline void lcm(Exponent* res,
 				const Exponent* a, const Exponent* b,
 				size_t varCount) {
+  ASSERT(res != 0 || varCount == 0);
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var) {
     if (a[var] > b[var])
       res[var] = a[var];
@@ -76,6 +106,8 @@ inline void lcm(Exponent* res,
 
 // Returns true iff a divides b.
 inline bool divides(const Exponent* a, const Exponent* b, size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var)
     if (a[var] > b[var])
       return false;
@@ -87,6 +119,8 @@ inline bool divides(const Exponent* a, const Exponent* b, size_t varCount) {
 // a dominates b if a[var] >= b[var] for all var, i.e. if b divides a.
 inline bool dominates(const Exponent* a, const Exponent* b,
 		      size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var)
     if (a[var] < b[var])
       return false;
@@ -101,6 +135,8 @@ inline bool dominates(const Exponent* a, const Exponent* b,
 // it is allowed for both of a[var] and b[var] to be 0.
 inline bool strictlyDivides(const Exponent* a, const Exponent* b,
 			    size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var)
     if (a[var] >= b[var] && a[var] > 0)
       return false;
@@ -110,6 +146,7 @@ inline bool strictlyDivides(const Exponent* a, const Exponent* b,
 // Sets the exponent vector of res to all zeroes, i.e. sets res equal
 // to 1.
 inline void setToIdentity(Exponent* res, size_t varCount) {
+  ASSERT(res != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var)
     res[var] = 0;
 }
@@ -117,6 +154,7 @@ inline void setToIdentity(Exponent* res, size_t varCount) {
 // Returns true iff the exponent vector of term is all zeroes,
 // i.e. iff a is equal to 1.
 inline bool isIdentity(const Exponent* a, size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var)
     if (a[var] != 0)
       return false;
@@ -125,6 +163,7 @@ inline bool isIdentity(const Exponent* a, size_t varCount) {
 
 // Returns true iff a[var] <= 1 for all var.
 inline bool isSquareFree(const Exponent* a, size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var)
     if (a[var] >= 2)
       return false;
@@ -133,6 +172,7 @@ inline bool isSquareFree(const Exponent* a, size_t varCount) {
 
 // Returns var such that a[var] >= a[i] for all i.
 inline size_t getFirstMaxExponent(const Exponent* a, size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
   size_t max = 0;
   for (size_t var = 1; var < varCount; ++var)
     if (a[max] < a[var])
@@ -143,6 +183,7 @@ inline size_t getFirstMaxExponent(const Exponent* a, size_t varCount) {
 // Returns the least integer var such that a[var] is non-zero.
 // Returns varCount if no such var exists.
 inline size_t getFirstNonZeroExponent(const Exponent* a, size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var)
     if (a[var] != 0)
       return var;
@@ -151,11 +192,29 @@ inline size_t getFirstNonZeroExponent(const Exponent* a, size_t varCount) {
 
 // Returns the number of integers var such that a[var] is non-zero.
 inline size_t getSizeOfSupport(const Exponent* a, size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
   size_t size = 0;
   for (size_t var = 0; var < varCount; ++var)
     if (a[var] != 0)
       ++size;
   return size;
+}
+
+inline bool hasSameSupport(const Exponent* a, const Exponent* b,
+						   size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
+  for (size_t var = 0; var < varCount; ++var) {
+	if (a[var] == 0) {
+	  if (b[var] != 0)
+		return false;
+	} else {
+	  ASSERT(a[var] != 0);
+	  if (b[var] == 0)
+		return false;
+	}
+  }
+  return true;
 }
 
 // Defines lexicographic order on exponents.
@@ -165,7 +224,9 @@ inline size_t getSizeOfSupport(const Exponent* a, size_t varCount) {
 //
 // For example (0,0) < (0,1) < (1,0).
 inline int lexCompare(const Exponent* a, const Exponent* b,
-		   size_t varCount) {
+					  size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var) {
     if (a[var] == b[var])
       continue;
@@ -179,6 +240,8 @@ inline int lexCompare(const Exponent* a, const Exponent* b,
 }
 
 inline bool equals(const Exponent* a, const Exponent* b, size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var)
 	if (a[var] != b[var])
 	  return false;
@@ -188,6 +251,8 @@ inline bool equals(const Exponent* a, const Exponent* b, size_t varCount) {
 // Defines reverse lexicographic order on exponents.
 inline int reverseLexCompare(const Exponent* a, const Exponent* b,
 		   size_t varCount) {
+  ASSERT(a != 0 || varCount == 0);
+  ASSERT(b != 0 || varCount == 0);
   for (size_t var = 0; var < varCount; ++var) {
     if (a[var] == b[var])
       continue;
@@ -202,6 +267,7 @@ inline int reverseLexCompare(const Exponent* a, const Exponent* b,
 
 // Writes e to file.
 inline void print(FILE* file, const Exponent* e, size_t varCount) {
+  ASSERT(e != 0 || varCount == 0);
   fputc('(', file);
 
   for (size_t var = 0; var < varCount; ++var) {
@@ -290,9 +356,13 @@ class Term {
   }
 
   Term& operator=(const Term& term) {
-    if (_varCount != term._varCount)
-      reset(term._varCount);
-      
+    if (_varCount != term._varCount) {
+	  Exponent* newBuffer = allocate(term._varCount);
+	  deallocate(_exponents, _varCount);
+	  _exponents = newBuffer;
+	  _varCount = term._varCount;
+	}
+
     ASSERT(_varCount == term._varCount);
     return (*this) = term._exponents;
   }
@@ -401,14 +471,33 @@ class Term {
     return ::getSizeOfSupport(_exponents, _varCount);
   }
 
+  bool hasSameSupport(const Term& a) const {
+	ASSERT(_varCount == a._varCount);
+	return hasSameSupport(a._exponents);
+  }
+
+  bool hasSameSupport(const Exponent* a) const {
+	return ::hasSameSupport(_exponents, a, _varCount);
+  }
+
   void colon(const Term& a, const Term& b) {
     ASSERT(_varCount == a._varCount);
-    ASSERT(a._varCount == b._varCount);
+    ASSERT(_varCount == b._varCount);
     colon(a._exponents, b._exponents);
   }
 
   void colon(const Exponent* a, const Exponent* b) {
     ::colon(_exponents, a, b, _varCount);
+  }
+
+  void encodedDual(const Term& dualOf, const Term& point) {
+    ASSERT(_varCount == dualOf._varCount);
+    ASSERT(_varCount == point._varCount);
+    encodedDual(dualOf._exponents, point._exponents);
+  }
+
+  void encodedDual(const Exponent* dualOf, const Exponent* point) {
+    ::encodedDual(_exponents, dualOf, point, _varCount);
   }
 
   void decrement() {
@@ -425,9 +514,11 @@ class Term {
 
   void reset(size_t newVarCount) {
     if (newVarCount != _varCount) {
+	  Exponent* newBuffer = allocate(newVarCount);
+
       deallocate(_exponents, _varCount);
       _varCount = newVarCount;
-      _exponents = allocate(newVarCount);
+      _exponents = newBuffer;
     }
     setToIdentity();  
   }
@@ -548,15 +639,15 @@ class Term {
  private:
   static Exponent* allocate(size_t size);
   static void deallocate(Exponent* p, size_t size);
-
+  
   void initialize(const Exponent* exponents, size_t varCount) {
-    _varCount = varCount;
     if (varCount > 0) {
       ASSERT(exponents != 0);
       _exponents = allocate(varCount);
       copy(exponents, exponents + varCount, _exponents);
     } else
       _exponents = 0;
+    _varCount = varCount;
   }
 
   Exponent* _exponents;

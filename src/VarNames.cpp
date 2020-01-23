@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,66 +11,90 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "VarNames.h"
 
-#include <sstream>
+#include "error.h"
+#include "FrobbyStringStream.h"
 
-const size_t VarNames::UNKNOWN = numeric_limits<size_t>::max();
+#include <limits>
 
 VarNames::VarNames() {
 }
 
 VarNames::VarNames(size_t varCount) {
   for (size_t i = 0; i < varCount; ++i) {
-    ostringstream out;
+    FrobbyStringStream out;
     out << 'x' << (i + 1);
-    addVar(out.str());
+    addVar(out);
   }    
 }
 
 VarNames::VarNames(const VarNames& names) {
-  for (size_t var = 0; var < names.getVarCount(); ++var)
-	addVar(names.getName(var));
+  *this = names;
 }
 
 VarNames::~VarNames() {
   clear();
 }
 
-void VarNames::addVar(const string& name) {
+bool VarNames::addVar(const string& name) {
   ASSERT(name != "");
-  ASSERT(!contains(name));
 
-  _indexToName.push_back(new string(name)); // TODO: fix leak
-  char* str = new char[name.size() + 1];
-  strcpy(str, name.c_str());
-  _nameToIndex[str] = _indexToName.size() - 1;
-
-  if (getVarCount() == UNKNOWN) {
-    fputs("ERROR: Too many variables names.\n", stderr);
-    exit(1);
+  pair<VarNameMap::iterator, bool> p =_nameToIndex.insert
+	(make_pair(name, _indexToName.size()));
+  if (!p.second) {
+	ASSERT(contains(name));
+	return false;
   }
+
+  try {
+	_indexToName.push_back(&(p.first->first)); // TODO: fix to vector of iters
+  } catch (...) {
+	_nameToIndex.erase(p.first);
+	throw;
+  }
+
+  if (getVarCount() == getInvalidIndex())
+	reportError("Too many variable names");
+
+  ASSERT(contains(name));
+  return true;
+}
+
+void VarNames::addVarSyntaxCheckUnique(const Scanner& in,
+									   const string& name) {
+  if (!addVar(name))
+	reportSyntaxError(in, "The variable " + name + " is declared twice.");
+  ASSERT(contains(name));
+}
+
+bool VarNames::operator<(const VarNames& names) const {
+  return lexicographical_compare(_indexToName.begin(),
+								 _indexToName.end(),
+								 names._indexToName.begin(),
+								 names._indexToName.end(),
+								 compareNames);
 }
 
 size_t VarNames::getIndex(const string& name) const {
-  return getIndex(name.c_str());
-}
-
-size_t VarNames::getIndex(const char* name) const {
   VarNameMap::const_iterator it = _nameToIndex.find(name);
   if (it == _nameToIndex.end())
-    return UNKNOWN;
+    return getInvalidIndex();
   else	
     return it->second;
 }
 
 bool VarNames::contains(const string& name) const {
-  return getIndex(name) != UNKNOWN;
+  return getIndex(name) != getInvalidIndex();
+}
+
+bool VarNames::namesAreDefault() const {
+  VarNames names(getVarCount());
+  return *this == names;
 }
 
 const string& VarNames::getName(size_t index) const {
@@ -84,17 +108,7 @@ size_t VarNames::getVarCount() const {
 }
 
 void VarNames::clear() {
-  vector<const char*> ptrs;
-  for (VarNameMap::const_iterator it = _nameToIndex.begin();
-	   it != _nameToIndex.end(); ++it)
-	ptrs.push_back(it->first);
   _nameToIndex.clear();
-  
-  for (size_t i = 0; i < ptrs.size(); ++i)
-	delete[] ptrs[i];
-  
-  for (size_t i = 0; i < _indexToName.size(); ++i)
-	delete _indexToName[i];
   _indexToName.clear();
 }
 
@@ -102,11 +116,16 @@ bool VarNames::empty() const {
   return _indexToName.empty();
 }
 
-
 VarNames& VarNames::operator=(const VarNames& names) {
-  clear();
-  for (size_t var = 0; var < names.getVarCount(); ++var)
-	addVar(names.getName(var));
+  if (this != &names) {
+	clear();
+
+	_indexToName.reserve(names.getVarCount());
+
+	for (size_t var = 0; var < names.getVarCount(); ++var)
+	  addVar(names.getName(var));
+  }
+
   return *this;
 }
 
@@ -121,6 +140,37 @@ bool VarNames::operator==(const VarNames& names) const {
   return true;
 }
 
+bool VarNames::operator!=(const VarNames& names) const {
+  return !operator==(names);
+}
+
+void VarNames::swapVariables(size_t a, size_t b) {
+  ASSERT(a < getVarCount());
+  ASSERT(b < getVarCount());
+  
+  ASSERT(_nameToIndex[*_indexToName[a]] == a);
+  ASSERT(_nameToIndex[*_indexToName[b]] == b);
+
+  if (a == b)
+	return;
+
+  std::swap(_indexToName[a], _indexToName[b]);
+  _nameToIndex[*_indexToName[a]] = a;
+  _nameToIndex[*_indexToName[b]] = b;
+
+  ASSERT(_nameToIndex[*_indexToName[a]] == a);
+  ASSERT(_nameToIndex[*_indexToName[b]] == b);
+}
+
+void VarNames::toString(string& str) const {
+  str.clear();
+  for (size_t i = 0; i < getVarCount(); ++i) {
+    if (i != 0)
+	  str += ", ";
+	str += getName(i);
+  }
+}
+
 void VarNames::print(FILE* file) const {
   fputs("VarNames(", file);
   for (size_t i = 0; i < getVarCount(); ++i) {
@@ -128,5 +178,13 @@ void VarNames::print(FILE* file) const {
       fputs(", ", file);
     fprintf(file, "%lu<->\"%s\"", (unsigned long)i, getName(i).c_str());
   }
-  fputc(')', file);
+  fputs(")\n", file);
+}
+
+size_t VarNames::getInvalidIndex() {
+  return numeric_limits<size_t>::max();
+}
+
+bool VarNames::compareNames(const string* a, const string* b) {
+  return *a < *b;
 }

@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,54 +11,59 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef ACTION_GUARD
 #define ACTION_GUARD
 
 #include "BoolParameter.h"
+
 #include <vector>
 
 class Parameter;
 
 class Action {
  public:
-  Action();
+  Action(const char* name,
+		 const char* shortDescription,
+		 const char* description,
+		 bool acceptsNonParameter);
   virtual ~Action();
 
-  virtual const char* getName() const = 0;
-  virtual const char* getShortDescription() const = 0;
-  virtual const char* getDescription() const = 0;
-  virtual Action* createNew() const = 0;
+  const char* getName() const;
+  const char* getShortDescription() const;
+  const char* getDescription() const;
 
   // processNonParameter() can be called at most once, and only if
   // acceptsNonParameter() returns true.
-  virtual bool processNonParameter(const char* str);
-  virtual bool acceptsNonParameter() const;
+  bool acceptsNonParameter() const;
+  virtual void processNonParameter(const char* str);
 
   virtual void obtainParameters(vector<Parameter*>& parameters) = 0;
 
   virtual void parseCommandLine(unsigned int tokenCount,
-				const char** tokens);
+								const char** tokens);
 
   virtual void perform() = 0;
 
-  // These methods are NOT thread safe.
-  typedef vector<const Action*> ActionContainer;
-  static const ActionContainer& getActions();
-  static Action* createAction(const string& name);
+  static void addNamesWithPrefix(const string& prefix,
+								 vector<string>& names);
+  static auto_ptr<Action> createActionWithPrefix(const string& prefix);
 
  protected:
+  const char* _name;
+  const char* _shortDescription;
+  const char* _description;
+  bool _acceptsNonParameter;
+
   BoolParameter _printActions;
 
  private:
   void processOption(const string& optionName,
-		     const char** params,
-		     unsigned int paramCount);
+					 const char** params,
+					 unsigned int paramCount);
 
-  static ActionContainer _actions;
   vector<Parameter*> _parameters;
 };
 

@@ -1,57 +1,62 @@
 #!/bin/bash
 
+if [ "$1" = "_few" ]; then
+  testLevel="few";
+  shift;
+else
+  testLevel="normal"
+fi
+
 TIMEFORMAT=$' (%2lR real)'
 
-echo -n "decom      "
-cd test/decom
-./runtests
-echo
-cd ../..
+normalTests="irrdecom hilbert primdecom intersect assoprimes \
+             minimize alexdual radical frob maxstandard optimize"
+specialTests="error idealFormats polyFormats latticeFormats internal"
+params="$*"
 
-echo -n "frob       "
-cd test/frob
-./runtests -split median
-echo
-cd ../..
+runNormalTests () {
+  action="$1"; shift;
+  path="$1"; shift;
+  cd test/$path;
+  ../testScripts/runtests $action $params
+  if [ $? != 0 ]; then exit 1; fi
+  cd ../..;
+}
 
-echo -n "intersect  "
-cd test/intersect
-./runtests
-echo
-cd ../..
+for t in $normalTests; do
+  echo -n "$t "
 
-echo -n "assoprimes "
-cd test/assoprimes
-./runtests
-echo
-cd ../..
+  echo -n "(s)";
+  runNormalTests $t specialIdeals
+  if [ "$testLevel" = "few" ]; then
+    if [ "$t" != "frob" ]; then
+      echo;
+	  continue;
+    fi
+  fi
 
-echo -n "minimize   "
-cd test/minimize
-./runtests
-echo
-cd ../..
+  echo -n "(c)";
+  runNormalTests $t commonIdeals
 
-echo -n "transform  "
-cd test/transform
-./runtests
-echo
-cd ../..
+  echo -n "(f)";
+  runNormalTests $t frob
 
-echo -n "latformat  "
-cd test/latformat
-./runtests
-echo
-cd ../..
+  if [ -e "$t" ]; then
+    echo -n "(#)"
+    runNormalTests $t $t
+  fi
 
-echo -n "alexdual   "
-cd test/alexdual
-./runtests
-echo
-cd ../..
+  echo
+done
 
-echo -n "radical    "
-cd test/radical
-./runtests
-echo
-cd ../..
+for t in $specialTests;
+do
+  echo -n "$t "
+  cd test/$t
+  ./runtests $*
+  if [ $? != 0 ]; then exit 1; fi
+  echo
+  cd ../..
+done
+
+echo "All tests passed."

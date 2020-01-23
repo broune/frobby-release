@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,18 +11,19 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "randomDataGenerators.h"
 
 #include "BigIdeal.h"
 #include "Ideal.h"
 #include "Term.h"
+#include "error.h"
+#include "FrobbyStringStream.h"
 
-#include <sstream>
+#include <limits>
 
 void generateLinkedListIdeal(BigIdeal& ideal, unsigned int variableCount) {
   VarNames names(variableCount);
@@ -42,23 +43,19 @@ void generateChessIdeal(BigIdeal& bigIdeal,
 						int deltaColumn[],
 						size_t deltaCount) {
   if (mpz_class(rowCount) * mpz_class(columnCount) >
-	  numeric_limits<size_t>::max()) {
-	fputs("ERROR: Number of positions on requested chess board too large.\n",
-		  stderr);
-	exit(1);
-  }
+	  numeric_limits<size_t>::max())
+	reportError("Number of positions on requested chess board too large.");
 
   // Generate names
   VarNames names;
   for (unsigned int row = 0; row < rowCount; ++row) {
 	for (unsigned int column = 0; column < columnCount; ++column) {
-	  stringstream name;
+	  FrobbyStringStream name;
 	  name << 'r' << (row + 1) << 'c' << (column + 1);
-	  names.addVar(name.str());
+	  names.addVar(name);
 	}
   }
-  bigIdeal.clear();
-  bigIdeal.setNames(names);
+  bigIdeal.clearAndSetNames(names);
   Ideal ideal(bigIdeal.getVarCount());
 
   // Generate ideal
@@ -154,15 +151,15 @@ bool generateRandomIdeal(BigIdeal& bigIdeal,
   return generatorsToGo == 0;
 }
 
-void generateRandomFrobeniusInstance(vector<Degree>& degrees) {
+void generateRandomFrobeniusInstance(vector<mpz_class>& degrees) {
   int numberCount = 10;//;4 + (rand() % 6);
   int mod = 100000;
 
   degrees.resize(numberCount);
 
-  Degree totalGcd = 0;
+  mpz_class totalGcd = 0;
   for (int i = 0; i < numberCount - 1; ++i) {
-    Degree number = Degree(2+(rand() % mod));
+    mpz_class number = mpz_class(2+(rand() % mod));
     if (totalGcd == 0)
       totalGcd = number;
     else {
@@ -175,7 +172,7 @@ void generateRandomFrobeniusInstance(vector<Degree>& degrees) {
 
   // This ensures that the gcd of all the numbers is 1.
   degrees[numberCount - 1] =
-    (totalGcd == 1 ? Degree((rand() % mod) + 2) : totalGcd + 1);
+    (totalGcd == 1 ? mpz_class((rand() % mod) + 2) : totalGcd + 1);
 
   sort(degrees.begin(), degrees.end());
 }

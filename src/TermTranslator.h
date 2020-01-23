@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef TERM_TRANSLATOR_GUARD
 #define TERM_TRANSLATOR_GUARD
 
@@ -40,7 +39,7 @@ class Term;
 class TermTranslator {
 public:
   // The constructors translate BigIdeals into Ideals, while
-  // initializing this to do the reverse translation. sortVars
+  // initializing *this to do the reverse translation. sortVars
   // indicates whether or not the order of the variable names should
   // be sorted. This cannot be turned off for the version taking
   // several ideals.
@@ -70,14 +69,27 @@ public:
   // to 0. Note that this does NOT preserve order - the highest ID
   // always maps to 0. The reason for this is that this is what is
   // needed for computing irreducible decompositions.
-  void addArtinianPowers(Ideal& ideal) const;
+  void addPurePowersAtInfinity(Ideal& ideal) const;
+
+  // The method addPurePowersAtInfinity adds high exponents that map to
+  // zero. This method replaces those high powers with the power
+  // zero.
+  void setInfinityPowersToZero(Ideal& ideal) const;
 
   const VarNames& getNames() const;
+  size_t getVarCount() const;
 
   // Replaces var^v by var^(a[i] - v) except that var^0 is left
-  // alone. It is a precondition that a[i] be larger than or equal to
-  // the mapped values.
+  // alone.
   void dualize(const vector<mpz_class>& a);
+
+  // Replaces var^v by var^(v-1).
+  void decrement();
+
+  void renameVariables(const VarNames& names);
+  void swapVariables(size_t a, size_t b);
+
+  bool lessThanReverseLex(const Exponent* a, const Exponent* b) const;
 
   void print(FILE* file) const;
 
@@ -94,7 +106,23 @@ private:
 
   vector<vector<mpz_class> > _exponents;
   mutable vector<vector<const char*> > _stringExponents;
+  mutable vector<vector<const char*> > _stringVarExponents;
   VarNames _names;
+};
+
+// A predicate that sorts according to reverse lexicographic order
+// on the translated values of a term.
+class TranslatedReverseLexComparator {
+ public:
+ TranslatedReverseLexComparator(const TermTranslator& translator):
+  _translator(translator) {
+  }
+
+  bool operator()(const Term& a, const Term& b) const;
+  bool operator()(const Exponent* a, const Exponent* b) const;
+
+ private:
+  const TermTranslator& _translator;
 };
 
 #endif

@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,15 +11,11 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef IO_HANDLER_GUARD
 #define IO_HANDLER_GUARD
-
-#include "TermConsumer.h"
-#include "VarNames.h"
 
 #include <vector>
 
@@ -27,86 +23,164 @@ class Term;
 class Scanner;
 class BigIdeal;
 class TermTranslator;
-class IdealWriter;
-class Ideal;
+class CoefTermConsumer;
+class TermConsumer;
+class VarNames;
+class BigPolynomial;
+class BigTermConsumer;
+class DataType;
+class CoefBigTermConsumer;
 
+// An IOHandler implements input and output in some format in such a way
+// that client code does not need to know which format is being used.
+// The IOHandler itself has no mutable of its own. If it needs to track
+// state, that state is either passed through each method call, of the
+// IOHandler returns an object that takes care of further IO and which
+// itself has state.
 class IOHandler {
  public:
   virtual ~IOHandler();
 
-  virtual void readIdeal(Scanner& in, BigIdeal& ideal) = 0;
-  virtual void readIrreducibleDecomposition(Scanner& in, BigIdeal& decom) = 0;
+  // Read an ideal and feed it to the consumer.
+  virtual void readIdeal(Scanner& in, BigTermConsumer& consumer) = 0;
+
+  // Read a number of ideals and feed them to the consumer.
+  virtual void readIdeals(Scanner& in, BigTermConsumer& consumer) = 0;
+
   virtual void readTerm(Scanner& in, const VarNames& names,
 						vector<mpz_class>& term);
+  virtual void readPolynomial(Scanner& in, CoefBigTermConsumer& consumer) = 0;
 
-  virtual void writeIdeal(FILE* out, const BigIdeal& ideal);
-  virtual void writeIdeal(FILE* out, const Ideal& ideal,
-						  const TermTranslator* translator);
+  virtual void writeTerm(const vector<mpz_class>& term,
+						 const VarNames& names,
+						 FILE* out) = 0;
 
-  virtual IdealWriter* createWriter
-    (FILE* file, const VarNames& names) const = 0;
-  virtual IdealWriter* createWriter
-    (FILE* file, const TermTranslator* translator) const = 0;
+  virtual bool hasMoreInput(Scanner& in) const;
 
-  virtual bool hasMoreInput(Scanner& scanner) const;
+  const char* getName() const;
+  const char* getDescription() const;
 
-  virtual const char* getFormatName() const = 0;
+  virtual auto_ptr<BigTermConsumer> createIdealWriter(FILE* out);
+  virtual auto_ptr<CoefBigTermConsumer> createPolynomialWriter(FILE* out);
 
   // Returns null if name is unknown.
-  static IOHandler* getIOHandler(const string& name);
+  static auto_ptr<IOHandler> createIOHandler(const string& name);
+
+  // This name is confusing. Change it.
+  static void addFormatNames(vector<string>& names);
+
+  bool supportsInput(const DataType& type) const;
+  bool supportsOutput(const DataType& type) const;
 
  protected:
-  void readTerm(BigIdeal& ideal, Scanner& scanner);
-  void readVarPower(vector<mpz_class>& term,
-					const VarNames& names, Scanner& scanner);
+  // For preserving ring information when writing an empty list of ideals.
+  virtual void writeRing(const VarNames& names, FILE* out) = 0;
+
+  // Output of polynomials.
+  virtual void writePolynomialHeader(const VarNames& names, FILE* out);
+  virtual void writePolynomialHeader(const VarNames& names,
+									 size_t termCount,
+									 FILE* out);
+  virtual void writeTermOfPolynomial(const mpz_class& coef,
+									 const Term& term,
+									 const TermTranslator* translator,
+									 bool isFirst,
+									 FILE* out);
+  virtual void writeTermOfPolynomial(const mpz_class& coef,
+									 const vector<mpz_class>& term,
+									 const VarNames& names,
+									 bool isFirst,
+									 FILE* out);
+  virtual void writePolynomialFooter(const VarNames& names,
+									 bool wroteAnyGenerators,
+									 FILE* out);
+
+  // Output of monomial ideals. writeIdealHeader should be called
+  // before starting output of a monomial ideal, and writeIdealFooter
+  // should be called afterwards. The parameter defineNewRing specifies
+  // whether the ring the ideal lies in needs to be written to the
+  // file. E.g. it only needs to be specified once when writing a list of
+  // ideals that all lie in the same ring.
+  //
+  // There are two overloads of writeIdealHeader because some formats
+  // have to know the number of generators of the ideal before that ideal
+  // can be written to the output. These formats are thus unable to implement
+  // the overload that does not specify this number.
+  // TODO: this means that those derivatives are then not substitutable for
+  // IOHandlers, so they should not be derivates of IOHandler. Fix this
+  // removing this part of the IOHandler interface, and push it down into
+  // two derivates, one with generatorCount and one without.
+  virtual void writeIdealHeader(const VarNames& names,
+								bool defineNewRing,
+								FILE* out) = 0;
+  virtual void writeIdealHeader(const VarNames& names,
+								bool defineNewRing,
+								size_t generatorCount,
+								FILE* out);
+  virtual void writeTermOfIdeal(const Term& term,
+								const TermTranslator* translator,
+								bool isFirst,
+								FILE* out) = 0;
+  virtual void writeTermOfIdeal(const vector<mpz_class>& term,
+								const VarNames& names,
+								bool isFirst,
+								FILE* out) = 0;
+  virtual void writeIdealFooter(const VarNames& names,
+								bool wroteAnyGenerators,
+								FILE* out) = 0;
+
+  void registerInput(const DataType& type);
+  void registerOutput(const DataType& type);
+
+  IOHandler(const char* formatName,
+			const char* formatDescription,
+			bool requiresSizeForIdealOutput);
+
+  static void writeCoefTermProduct(const mpz_class& coef,
+								   const Term& term,
+								   const TermTranslator* translator,
+								   bool hidePlus,
+								   FILE* out);
+
+  static void writeCoefTermProduct(const mpz_class& coef,
+								   const vector<mpz_class>& term,
+								   const VarNames& names,
+								   bool hidePlus,
+								   FILE* out);
+
+  static void writeTermProduct(const Term& term,
+							   const TermTranslator* translator,
+							   FILE* out);
+
+  static void writeTermProduct(const vector<mpz_class>& term,
+							   const VarNames& names,
+							   FILE* out);
+
+  static void readTerm(BigIdeal& ideal, Scanner& in);
+  static void readCoefTerm(BigPolynomial& polynomial,
+						   bool firstTerm,
+						   Scanner& in);
+  static void readCoefTerm
+	(mpz_class& coef,
+	 vector<mpz_class>& term,
+	 const VarNames& names,
+	 bool firstTerm,
+	 Scanner& in);
+  static void readVarPower(vector<mpz_class>& term,
+						   const VarNames& names, Scanner& in);
+
+  vector<const DataType*> _supportedInputs;
+  vector<const DataType*> _supportedOutputs;
+
+  const char* _formatName;
+  const char* _formatDescription;
+  bool _requiresSizeForIdealOutput;
+
+  friend class IdealWriter;
+  friend class PolynomialWriter;
+  friend class DelayedIdealWriter;
 };
 
-#include "BigTermConsumer.h"
-
-class IdealWriter : public TermConsumer, public BigTermConsumer {
- public:
-  IdealWriter();
-  IdealWriter(FILE* file, const VarNames& names);
-  IdealWriter(FILE* file, const TermTranslator* translator, bool includeVar);
-  virtual ~IdealWriter();
-
-  virtual void consume(const vector<mpz_class>& term) = 0;
-  virtual void consume(const Term& term) = 0;
-
-  virtual void writeJustATerm(const Term& term);
-
-  // TODO: implement everywhere and make pure virtual
-  virtual void consume(const Term& term, TermTranslator* translator) {
-	if (_translator == 0)
-	  _translator = translator;
-	ASSERT(_translator == translator); // TODO: this is bad
-	consume(term);
-  }
-
-  // TODO: implement everywhere and make pure virtual
-  virtual void consume(mpz_ptr* term) {
-	vector<mpz_class> v(_names.getVarCount());
-	for (size_t var = 0; var < _names.getVarCount(); ++var) {
-	  v[var] = mpz_class(term[var]);
-	}
-  }
-
- protected:
-  static void writeTerm(const vector<const char*>& term, FILE* file);
-
-  static void writeTerm(const Term& term,
-			const TermTranslator* translator,
-			FILE* file);
-
-  static void writeTerm(const vector<mpz_class>& term,
-			const VarNames& names,
-			FILE* file);
-
-  FILE* _file;
-  VarNames _names;
-  const TermTranslator* _translator;
-};
-
-void readFrobeniusInstance(Scanner& scanner, vector<mpz_class>& numbers);
+void readFrobeniusInstance(Scanner& in, vector<mpz_class>& numbers);
 
 #endif

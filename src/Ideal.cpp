@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "Ideal.h"
 
@@ -54,6 +53,14 @@ bool Ideal::contains(const Exponent* term) const {
   return false;
 }
 
+bool Ideal::containsIdentity() const {
+  const_iterator stop = _terms.end();
+  for (const_iterator it = _terms.begin(); it != stop; ++it)
+    if (::isIdentity(*it, _varCount))
+      return true;
+  return false;
+}
+
 bool Ideal::strictlyContains(const Exponent* term) const {
   const_iterator stop = _terms.end();
   for (const_iterator it = _terms.begin(); it != stop; ++it)
@@ -65,6 +72,10 @@ bool Ideal::strictlyContains(const Exponent* term) const {
 bool Ideal::isMinimallyGenerated() const {
   Minimizer minimizer(_varCount);
   return minimizer.isMinimallyGenerated(_terms.begin(), _terms.end());
+}
+
+bool Ideal::isZeroIdeal() const {
+  return _terms.empty();
 }
 
 bool Ideal::isIrreducible() const {
@@ -157,6 +168,10 @@ void Ideal::print(FILE* file) const {
 void Ideal::insert(const Exponent* exponents) {
   Exponent* term = _allocator.allocate();
   copy(exponents, exponents + _varCount, term);
+
+  // push_back could throw bad_alloc, but the allocator is already
+  // keeping track of the allocated memory, so there is not a memory
+  // leak.
   _terms.push_back(term);
 }
 
@@ -201,10 +216,29 @@ void Ideal::singleDegreeSort(size_t var) {
 	    Term::AscendingSingleDegreeComparator(var, _varCount));
 }
 
+void Ideal::product(const Exponent* by) {
+  iterator stop = _terms.end();
+  for (iterator it = _terms.begin(); it != stop; ++it)
+    ::product(*it, *it, by, _varCount);
+}
+
 void Ideal::colon(const Exponent* by) {
   iterator stop = _terms.end();
   for (iterator it = _terms.begin(); it != stop; ++it)
     ::colon(*it, *it, by, _varCount);
+}
+
+void Ideal::colon(size_t var, Exponent e) {
+  iterator stop = _terms.end();
+  for (iterator it = _terms.begin(); it != stop; ++it) {
+	Exponent& ite = (*it)[var];
+	if (ite != 0) {
+	  if (ite > e)
+		ite -= e;
+	  else
+		ite = 0;
+	}
+  }
 }
 
 bool Ideal::colonReminimize(const Exponent* by) {
@@ -220,6 +254,27 @@ bool Ideal::colonReminimize(const Exponent* by) {
   return pair.second;
 }
 
+bool Ideal::colonReminimize(size_t var, Exponent e) {
+  ASSERT(isMinimallyGenerated());
+
+  Minimizer minimizer(_varCount);
+  pair<iterator, bool> pair =
+	minimizer.colonReminimize(_terms.begin(), _terms.end(), var, e);
+
+  _terms.erase(pair.first, _terms.end());
+
+  ASSERT(isMinimallyGenerated());
+  return pair.second;
+}
+
+void Ideal::remove(const_iterator it) {
+  ASSERT(begin() <= it);
+  ASSERT(it < end());
+  ::swap(const_cast<Exponent*&>(*it), *(_terms.end() - 1));
+  _terms.pop_back();
+}
+
+
 void Ideal::removeMultiples(const Exponent* term) {
   iterator newEnd = _terms.begin();
   iterator stop = _terms.end();
@@ -230,6 +285,32 @@ void Ideal::removeMultiples(const Exponent* term) {
     }
   }
   _terms.erase(newEnd, stop);
+}
+
+void Ideal::removeMultiples(size_t var, Exponent e) {
+  iterator newEnd = _terms.begin();
+  iterator stop = _terms.end();
+  for (iterator it = _terms.begin(); it != stop; ++it) {
+    if ((*it)[var] < e) {
+	  *newEnd = *it;
+	  ++newEnd;
+    }
+  }
+  _terms.erase(newEnd, stop);
+}
+
+void Ideal::insertNonMultiples(const Exponent* term, const Ideal& ideal) {
+  const_iterator stop = ideal.end();
+  for (const_iterator it = ideal.begin(); it != stop; ++it)
+    if (!::divides(term, *it, _varCount))
+	  insert(*it);
+}
+
+void Ideal::insertNonMultiples(size_t var, Exponent e, const Ideal& ideal) {
+  const_iterator stop = ideal.end();
+  for (const_iterator it = ideal.begin(); it != stop; ++it)
+    if ((*it)[var] < e)
+	  insert(*it);
 }
 
 void Ideal::removeStrictMultiples(const Exponent* term) {
@@ -262,6 +343,14 @@ void Ideal::clearAndSetVarCount(size_t varCount) {
   _allocator.reset(varCount);
 }
 
+Ideal::const_iterator Ideal::getMultiple(size_t var) const {
+  const_iterator stop = _terms.end();
+  for (const_iterator it = _terms.begin(); it != stop; ++it)
+	if ((*it)[var] > 0)
+	  return it;
+  return stop;
+}
+
 Ideal& Ideal::operator=(const Ideal& ideal) {
   clearAndSetVarCount(ideal.getVarCount());
   insert(ideal);
@@ -286,16 +375,14 @@ void Ideal::swap(Ideal& ideal) {
 
 
 
-const int ExponentsPerChunk = 1000;
+const int ExponentsPerChunk = 1024;
 const int MinTermsPerChunk = 2;
 
 class ChunkPool {
 public:
   Exponent* allocate() {
-    if (_chunks.empty()) {
-      Exponent* e = new Exponent[ExponentsPerChunk];
-      return e;
-    }
+    if (_chunks.empty())
+      return new Exponent[ExponentsPerChunk];
 
     Exponent* chunk = _chunks.back();
     _chunks.pop_back();
@@ -303,12 +390,23 @@ public:
   }
 
   void deallocate(Exponent* chunk) {
-    _chunks.push_back(chunk);
+	// deallocate can be called from a destructor, so no exceptions
+	// can be allowed to escape from it.
+	try {
+	  _chunks.push_back(chunk);
+	} catch (const bad_alloc&) {
+	  delete[] chunk;
+	}
   }
-  
-  ~ChunkPool() {
+
+  void clear() {
     for (size_t i = 0; i < _chunks.size(); ++i)
       delete[] _chunks[i];
+	_chunks.clear();
+  }
+
+  ~ChunkPool() {
+	clear();
   }
 
 private:
@@ -317,11 +415,10 @@ private:
 
 Ideal::ExponentAllocator::ExponentAllocator(size_t varCount):
   _varCount(varCount),
-  _chunk(0),
   _chunkIterator(0),
   _chunkEnd(0) {
   if (_varCount == 0)
-	_varCount = 1; // Otherwise strange things happen
+	_varCount = 1;
 }
 
 Ideal::ExponentAllocator::~ExponentAllocator() {
@@ -332,15 +429,24 @@ Exponent* Ideal::ExponentAllocator::allocate() {
   if (_chunkIterator + _varCount > _chunkEnd) {
     if (useSingleChunking()) {
       Exponent* term = new Exponent[_varCount];
-      _chunks.push_back(term);
+	  try {
+		_chunks.push_back(term);
+	  } catch (...) {
+		delete[] term;
+		throw;
+	  }
       return term;
     }
 
-    _chunk = globalChunkPool.allocate();
-    _chunkIterator = _chunk;
-    _chunkEnd = _chunk + ExponentsPerChunk;
-
-    _chunks.push_back(_chunk);
+	_chunkIterator = globalChunkPool.allocate();
+	_chunkEnd = _chunkIterator + ExponentsPerChunk;
+	
+	try {
+	  _chunks.push_back(_chunkIterator);
+	} catch (...) {
+	  globalChunkPool.deallocate(_chunkIterator);
+	  throw;
+	}
   }
 
   Exponent* term = _chunkIterator;
@@ -351,12 +457,13 @@ Exponent* Ideal::ExponentAllocator::allocate() {
 }
 
 void Ideal::ExponentAllocator::reset(size_t newVarCount) {
+  _varCount = newVarCount;
+
   if (useSingleChunking()) {
     for (size_t i = 0; i < _chunks.size(); ++i)
       delete[] _chunks[i];
     _chunks.clear();
   } else {
-    _chunk = 0;
     _chunkIterator = 0;
     _chunkEnd = 0;
     
@@ -364,13 +471,10 @@ void Ideal::ExponentAllocator::reset(size_t newVarCount) {
       globalChunkPool.deallocate(_chunks[i]);
     _chunks.clear();
   }
-
-  _varCount = newVarCount;
 }
 
 void Ideal::ExponentAllocator::swap(ExponentAllocator& allocator) {
   std::swap(_varCount, allocator._varCount);
-  std::swap(_chunk, allocator._chunk);
   std::swap(_chunkIterator, allocator._chunkIterator);
   std::swap(_chunkEnd, allocator._chunkEnd);
 
@@ -379,4 +483,8 @@ void Ideal::ExponentAllocator::swap(ExponentAllocator& allocator) {
 
 bool Ideal::ExponentAllocator::useSingleChunking() const {
   return _varCount > ExponentsPerChunk / MinTermsPerChunk;
+}
+
+void Ideal::clearStaticCache() {
+  globalChunkPool.clear();
 }

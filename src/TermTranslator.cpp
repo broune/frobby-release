@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "TermTranslator.h"
 
@@ -22,14 +21,15 @@
 #include "Ideal.h"
 #include "BigIdeal.h"
 #include "VarNames.h"
+#include "FrobbyStringStream.h"
+#include "ElementDeleter.h"
 
 #include <iterator>
-#include <sstream>
 #include <set>
 #include <algorithm>
 
 TermTranslator::TermTranslator(const BigIdeal& bigIdeal, Ideal& ideal,
-			       bool sortVars) {
+							   bool sortVars) {
   vector<BigIdeal*> bigIdeals;
   bigIdeals.push_back(const_cast<BigIdeal*>(&bigIdeal));
   initialize(bigIdeals, sortVars);
@@ -41,12 +41,16 @@ TermTranslator::TermTranslator(const vector<BigIdeal*>& bigIdeals,
 							   vector<Ideal*>& ideals) {
   ASSERT(!bigIdeals.empty());
 
+  ideals.clear();
+  ElementDeleter<vector<Ideal*> > idealsDeleter(ideals);
+
   initialize(bigIdeals, true);
 
   for (size_t i = 0; i < bigIdeals.size(); ++i) {
-    ideals.push_back(new Ideal());
+	exceptionSafePushBack(ideals, auto_ptr<Ideal>(new Ideal()));
     shrinkBigIdeal(*(bigIdeals[i]), *(ideals.back()));
   }
+  idealsDeleter.release();
 }
 
 // Helper function for extractExponents.
@@ -63,7 +67,7 @@ bool mpzClassPointerEqual(const mpz_class* a, const mpz_class* b) {
 //
 // Assign int IDs to big integer exponents. The correspondence
 // preserves order, except that the largest ID maps to 0, which is
-// necessary to support adding artinian powers. Only the exponents
+// necessary to support adding pure powers. Only the exponents
 // that actually appear in generators of the ideals are translated,
 // except that 0 is guaranteed to be included and to be assigned the
 // ID 0, and that a maximal ID is added, which also maps to zero.
@@ -91,7 +95,7 @@ void extractExponents(const vector<BigIdeal*>& ideals,
   for (size_t i = 0; i < ideals.size(); ++i) {
     BigIdeal& ideal = *(ideals[i]);
     size_t var = ideal.getNames().getIndex(varName);
-    if (var == VarNames::UNKNOWN)
+    if (var == VarNames::getInvalidIndex())
       continue;
 
     size_t generatorCount = ideal.getGeneratorCount();
@@ -127,21 +131,46 @@ void TermTranslator::clearStrings() {
     for (size_t j = 0; j < _stringExponents[i].size(); ++j)
       delete[] _stringExponents[i][j];
   _stringExponents.clear();
+
+  for (size_t i = 0; i < _stringVarExponents.size(); ++i)
+    for (size_t j = 0; j < _stringVarExponents[i].size(); ++j)
+      delete[] _stringVarExponents[i][j];
+  _stringVarExponents.clear();
+}
+
+bool TermTranslatorInitializeHelper_StringPointerCompareLess
+(const string* a, const string* b) {
+  return *a < *b;
+}
+
+bool TermTranslatorInitializeHelper_StringPointerCompareEqual
+(const string* a, const string* b) {
+  return *a == *b;
 }
 
 void TermTranslator::initialize(const vector<BigIdeal*>& bigIdeals,
-				bool sortVars) {
+								bool sortVars) {
   ASSERT(!bigIdeals.empty());
 
   if (sortVars) {
-    set<string> variables;
-    for (size_t ideal = 0; ideal < bigIdeals.size(); ++ideal)
+	vector<const string*> variables;
+    for (size_t ideal = 0; ideal < bigIdeals.size(); ++ideal) {
+	  const VarNames& names = bigIdeals[ideal]->getNames();
+	  if (ideal != 0 && names == bigIdeals[ideal - 1]->getNames())
+		continue;
       for (size_t var = 0; var < bigIdeals[ideal]->getVarCount(); ++var)
-	variables.insert(bigIdeals[ideal]->getNames().getName(var));
-    
-    for (set<string>::const_iterator var = variables.begin();
-	 var != variables.end(); ++var)
-      _names.addVar(*var);
+		variables.push_back(&(names.getName(var)));
+	}
+	std::sort(variables.begin(), variables.end(),
+			  TermTranslatorInitializeHelper_StringPointerCompareLess);
+	variables.erase
+	  (std::unique(variables.begin(), variables.end(),
+				   TermTranslatorInitializeHelper_StringPointerCompareEqual),
+	   variables.end());
+
+    for (vector<const string*>::const_iterator var = variables.begin();
+		 var != variables.end(); ++var)
+      _names.addVar(**var);
   } else {
     ASSERT(bigIdeals.size() == 1);
     _names = bigIdeals[0]->getNames();
@@ -154,17 +183,24 @@ void TermTranslator::initialize(const vector<BigIdeal*>& bigIdeals,
 }
 
 void TermTranslator::shrinkBigIdeal(const BigIdeal& bigIdeal,
-				    Ideal& ideal) const {
+									Ideal& ideal) const {
   ideal.clearAndSetVarCount(_names.getVarCount());
 
   // Figure out how bigIdeal's names map onto _names.
   vector<size_t> newVars;
-  for (size_t var = 0; var < bigIdeal.getVarCount(); ++var) {
-    const string& name = bigIdeal.getNames().getName(var);
-    size_t newVar = _names.getIndex(name);
-    newVars.push_back(newVar);
+  newVars.reserve(bigIdeal.getVarCount());
 
-    ASSERT(newVar != VarNames::UNKNOWN);
+  if (bigIdeal.getNames() == _names) {
+	for (size_t var = 0; var < bigIdeal.getVarCount(); ++var)
+	  newVars.push_back(var);
+  } else {
+	for (size_t var = 0; var < bigIdeal.getVarCount(); ++var) {
+	  const string& name = bigIdeal.getNames().getName(var);
+	  size_t newVar = _names.getIndex(name);
+	  newVars.push_back(newVar);
+	  
+	  ASSERT(newVar != VarNames::getInvalidIndex());
+	}
   }
 
   // Insert generators after translating exponents and variables.
@@ -179,11 +215,11 @@ void TermTranslator::shrinkBigIdeal(const BigIdeal& bigIdeal,
   }
 }
 
-void TermTranslator::addArtinianPowers(Ideal& ideal) const {
+void TermTranslator::addPurePowersAtInfinity(Ideal& ideal) const {
   size_t varCount = ideal.getVarCount();
 
-  // Find out which variables already have artinian powers.
-  vector<bool> hasArtinianPower(varCount);
+  // Find out which variables already have pure powers.
+  vector<bool> hasPurePower(varCount);
 
   Ideal::const_iterator stop = ideal.end();
   for (Ideal::const_iterator term = ideal.begin(); term != stop; ++term) {
@@ -194,33 +230,82 @@ void TermTranslator::addArtinianPowers(Ideal& ideal) const {
     if (var == varCount)
       return; // The ideal is <1> so we need add nothing.
 
-    hasArtinianPower[var] = true;
+    hasPurePower[var] = true;
   }
 
-  // Add any missing Artinian powers.
+  // Add any missing pure powers.
   for (size_t var = 0; var < varCount; ++var) {
-    if (hasArtinianPower[var])
+    if (hasPurePower[var])
       continue;
 
-    Term artinian(varCount);
-    artinian[var] = _exponents[var].size() - 1;
-    ideal.insert(artinian);
+    Term purePower(varCount);
+    purePower[var] = _exponents[var].size() - 1;
+    ideal.insert(purePower);
+  }
+}
+
+void TermTranslator::setInfinityPowersToZero(Ideal& ideal) const {
+  size_t varCount = ideal.getVarCount();
+  Ideal::iterator term = ideal.begin();
+  while (term != ideal.end()) {
+	bool changed = false;
+	for (size_t var = 0; var < varCount; ++var) {
+	  if ((*term)[var] == getMaxId(var)) {
+		ASSERT(getExponent(var, (*term)[var]) == 0);
+		(*term)[var] = 0;
+		changed = true;
+	  }
+	}
+	++term;
+	continue;
+	if (changed && ::isIdentity(*term, varCount)) {
+	  bool last = (term + 1 == ideal.end());
+	  ideal.remove(term);
+	  if (last)
+		break;
+	} else
+	  ++term;
   }
 }
 
 void TermTranslator::dualize(const vector<mpz_class>& a) {
-  bool hasStrings = !_stringExponents.empty();
-  if (hasStrings)
-	clearStrings();
-
-  for (size_t var = 0; var < _exponents.size(); ++var) {
-    for (size_t exp = 0; exp < _exponents[var].size(); ++exp) {
-	  ASSERT(_exponents[var][exp] <= a[var]);
-
+  clearStrings();
+  for (size_t var = 0; var < _exponents.size(); ++var)
+    for (size_t exp = 0; exp < _exponents[var].size(); ++exp)
 	  if (_exponents[var][exp] != 0)
 		_exponents[var][exp] = a[var] - _exponents[var][exp] + 1;
-	}
-  }
+}
+
+void TermTranslator::decrement() {
+  clearStrings();
+  for (size_t var = 0; var < _exponents.size(); ++var)
+    for (size_t exp = 0; exp < _exponents[var].size(); ++exp)
+	  _exponents[var][exp] -= 1;
+}
+
+void TermTranslator::renameVariables(const VarNames& names) {
+  ASSERT(getVarCount() == names.getVarCount());
+
+  clearStrings();
+  _names = names;
+}
+
+void TermTranslator::swapVariables(size_t a, size_t b) {
+  ASSERT(a < getVarCount());
+  ASSERT(b < getVarCount());
+
+  if (a == b)
+	return;
+
+  std::swap(_exponents[a], _exponents[b]);
+
+  if (!_stringExponents.empty())
+	std::swap(_stringExponents[a], _stringExponents[b]);
+
+  if (!_stringVarExponents.empty())
+	std::swap(_stringVarExponents[a], _stringVarExponents[b]);
+
+  _names.swapVariables(a, b);
 }
 
 void TermTranslator::print(FILE* file) const {
@@ -238,16 +323,19 @@ void TermTranslator::print(FILE* file) const {
 }
 
 void TermTranslator::makeStrings(bool includeVar) const {
-  ASSERT(_stringExponents.empty());
+  vector<vector<const char*> >& strings =
+	includeVar ? _stringVarExponents : _stringExponents;
 
-  _stringExponents.resize(_exponents.size());
+  ASSERT(strings.empty());
+
+  strings.resize(_exponents.size());
   for (unsigned int i = 0; i < _exponents.size(); ++i) {
-    _stringExponents[i].resize(_exponents[i].size());
+    strings[i].resize(_exponents[i].size());
     for (unsigned int j = 0; j < _exponents[i].size(); ++j) {
       char* str = 0;
 
       if (_exponents[i][j] != 0 || !includeVar) {
-		stringstream out;
+		FrobbyStringStream out;
 		if (!includeVar)
 		  out << _exponents[i][j];
 		else {
@@ -259,7 +347,7 @@ void TermTranslator::makeStrings(bool includeVar) const {
 		str = new char[out.str().size() + 1];
 		strcpy(str, out.str().c_str());
       }
-      _stringExponents[i][j] = str;
+      strings[i][j] = str;
     }
   }
 }
@@ -281,13 +369,11 @@ getVarExponentString(size_t variable, Exponent exponent) const {
   ASSERT(variable < _exponents.size());
   ASSERT(exponent < _exponents[variable].size());
 
-  if (_stringExponents.empty())
+  if (_stringVarExponents.empty())
 	makeStrings(true);
-  return (_stringExponents[variable][exponent]);
+  return _stringVarExponents[variable][exponent];
 }
 
-// TODO: have two separate exponent containers including and not
-// including the var, respectively.
 const char* TermTranslator::
 getExponentString(size_t variable, Exponent exponent) const {
   ASSERT(variable < _exponents.size());
@@ -295,7 +381,7 @@ getExponentString(size_t variable, Exponent exponent) const {
 
   if (_stringExponents.empty())
 	makeStrings(false);
-  return (_stringExponents[variable][exponent]);
+  return _stringExponents[variable][exponent];
 }
 
 const mpz_class& TermTranslator::
@@ -324,4 +410,38 @@ Exponent TermTranslator::shrinkExponent(size_t var,
 
 const VarNames& TermTranslator::getNames() const {
   return _names;
+}
+
+size_t TermTranslator::getVarCount() const {
+  return _names.getVarCount();
+}
+
+bool TermTranslator::
+lessThanReverseLex(const Exponent* a, const Exponent* b) const {
+  size_t varCount = getVarCount();
+
+  for (size_t var = 0; var < varCount; ++var) {
+	const mpz_class& ae = getExponent(var, a[var]);
+	const mpz_class& be = getExponent(var, b[var]);
+
+    if (ae != be)
+	  return ae > be;
+  }
+
+  return 0;
+}
+
+bool TranslatedReverseLexComparator::operator()(const Term& a,
+												const Term& b) const {
+  ASSERT(a.getVarCount() == _translator.getVarCount());
+  ASSERT(b.getVarCount() == _translator.getVarCount());
+  return operator()(a.begin(), b.begin());
+}
+
+bool TranslatedReverseLexComparator::operator()(const Exponent* a,
+												const Exponent* b) const {
+  ASSERT(a != 0 || _translator.getVarCount() == 0);
+  ASSERT(b != 0 || _translator.getVarCount() == 0);
+
+  return _translator.lessThanReverseLex(a, b);
 }

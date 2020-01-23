@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,12 +11,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "Action.h"
+
+#include "error.h"
+#include "NameFactory.h"
 
 #include "IrreducibleDecomAction.h"
 #include "TransformAction.h"
@@ -27,87 +29,110 @@
 #include "FrobeniusAction.h"
 #include "AnalyzeAction.h"
 #include "LatticeFormatAction.h"
-#include "IntersectAction.h"
+#include "IntersectionAction.h"
 #include "AssociatedPrimesAction.h"
-#include "PrimaryDecomAction.h"
 #include "AlexanderDualAction.h"
+#include "HilbertAction.h"
+#include "PolyTransformAction.h"
+#include "HelpAction.h"
+#include "TestAction.h"
+#include "PrimaryDecomAction.h"
+#include "OptimizeAction.h"
+#include "MaximalStandardAction.h"
 
-Action::ActionContainer Action::_actions;
-
-Action::Action():
+Action::Action(const char* name,
+			   const char* shortDescription,
+			   const char* description,
+			   bool acceptsNonParameterParam):
+  _name(name),
+  _shortDescription(shortDescription),
+  _description(description),
+  _acceptsNonParameter(acceptsNonParameterParam),
   _printActions("time", "Display and time each subcomputation.", false) {
 }
 
 Action::~Action() {
 }
 
-const Action::ActionContainer& Action::getActions() {
-  if (_actions.empty()) {
-    // This method uses static variables instead of new to avoid
-    // spurious reports from memory leak detectors.
+namespace {
+  typedef NameFactory<Action> ActionFactory;
 
-    static IrreducibleDecomAction irreducibleDecom;
-    _actions.push_back(&irreducibleDecom);
+  ActionFactory getActionFactory() {
+	ActionFactory factory;
 
-	static AlexanderDualAction alexanderDual;
-	_actions.push_back(&alexanderDual);
+	nameFactoryRegister<HilbertAction>(factory);
+	nameFactoryRegister<IrreducibleDecomAction>(factory);
+	nameFactoryRegister<PrimaryDecomAction>(factory);
+	nameFactoryRegister<AlexanderDualAction>(factory);
+	nameFactoryRegister<AssociatedPrimesAction>(factory);
+	nameFactoryRegister<MaximalStandardAction>(factory);	
+	nameFactoryRegister<OptimizeAction>(factory);
 
-    static AssociatedPrimesAction associatedPrimes;
-    _actions.push_back(&associatedPrimes);
+	nameFactoryRegister<TransformAction>(factory);
+	nameFactoryRegister<PolyTransformAction>(factory);
 
-    static IntersectAction intersect;
-    _actions.push_back(&intersect);
+	nameFactoryRegister<IntersectionAction>(factory);
+	nameFactoryRegister<GenerateIdealAction>(factory);
+	nameFactoryRegister<FrobeniusAction>(factory);
+	nameFactoryRegister<DynamicFrobeniusAction>(factory);
+	nameFactoryRegister<GenerateFrobeniusAction>(factory);
+	nameFactoryRegister<AnalyzeAction>(factory);
+	nameFactoryRegister<LatticeFormatAction>(factory);
 
-    static GenerateIdealAction generateIdeal; 
-    _actions.push_back(&generateIdeal);
+	nameFactoryRegister<HelpAction>(factory);
+	nameFactoryRegister<TestAction>(factory);
 
-    static TransformAction transform;
-    _actions.push_back(&transform);
-
-    static FrobeniusAction frobenius;
-    _actions.push_back(&frobenius);
-
-    static DynamicFrobeniusAction dynamicFrobenius;
-    _actions.push_back(&dynamicFrobenius);
-
-    static GenerateFrobeniusAction generateFrobenius;
-    _actions.push_back(&generateFrobenius);
-
-    static AnalyzeAction analyze;
-    _actions.push_back(&analyze);
-
-    static LatticeFormatAction latticeFormat;
-    _actions.push_back(&latticeFormat);
-
-    static HelpAction help;
-    _actions.push_back(&help);
-
-    //static PrimaryDecomAction primaryDecom;
-    //_actions.push_back(&primaryDecom);
+	return factory;
   }
-
-  return _actions;
 }
 
-Action* Action::createAction(const string& name) {
-  getActions();
-  for (ActionContainer::const_iterator it = _actions.begin();
-       it != _actions.end(); ++it) {
-    if (name == (*it)->getName())
-      return (*it)->createNew();
+void Action::addNamesWithPrefix(const string& prefix,
+								vector<string>& names) {
+  getActionFactory().addNamesWithPrefix(prefix, names);
+}
+
+auto_ptr<Action> Action::createActionWithPrefix(const string& prefix) {
+  vector<string> names;
+  addNamesWithPrefix(prefix, names);
+
+  if (names.empty())
+	reportError("No action has the prefix \"" + prefix + "\".\n");
+
+  if (names.size() >= 2) {
+	string err = "Prefix \"" + prefix + "\" is ambigous.\nPossibilities are:";
+	for (vector<string>::iterator name = names.begin();
+		 name != names.end(); ++name) {
+	  err += ' ';
+	  err += *name;
+	}
+	err += '\n';
+	reportError(err);
   }
 
-  return 0;
+  ASSERT(names.size() == 1);
+
+  return getActionFactory().createWithPrefix(prefix);
+}
+
+const char* Action::getName() const {
+  return _name;
+}
+
+const char* Action::getShortDescription() const {
+  return _shortDescription;
+}
+
+const char* Action::getDescription() const {
+  return _description;
 }
 
 bool Action::acceptsNonParameter() const {
-  return false;
+  return _acceptsNonParameter;
 }
 
-bool Action::processNonParameter(const char* str) {
+void Action::processNonParameter(const char*) {
   ASSERT(false);
-
-  return false;
+  reportInternalError("Action::processNonParameter called.");
 }
 
 void Action::obtainParameters(vector<Parameter*>& parameters) {
@@ -115,24 +140,20 @@ void Action::obtainParameters(vector<Parameter*>& parameters) {
 }
 
 void Action::processOption(const string& optionName,
-			   const char** params,
-			   unsigned int paramCount) {
-  params[-1] += 1;
+						   const char** params,
+						   unsigned int paramCount) {
   for (vector<Parameter*>::iterator it = _parameters.begin();
        it != _parameters.end(); ++it) {
     if ((*it)->process(params - 1, paramCount + 1))
       return;
   }
 
-  fprintf(stderr, "ERROR: Unknown option \"-%s\".\n",
-		  optionName.c_str());
-  exit(1);
+  reportError("Unknown option \"-" + optionName + "\".");
 }
 
 void Action::parseCommandLine(unsigned int tokenCount, const char** tokens) {
   if (acceptsNonParameter() && tokenCount > 0 && tokens[0][0] != '-') {
-    if (!processNonParameter(tokens[0]))
-      exit(1);
+    processNonParameter(tokens[0]);
     --tokenCount;
     ++tokens;
   }
@@ -143,12 +164,9 @@ void Action::parseCommandLine(unsigned int tokenCount, const char** tokens) {
   while (i < tokenCount) {
     ASSERT(tokens[i][0] != '\0');
 
-    if (tokens[i][0] != '-') {
-      fprintf(stderr, "ERROR: Expected an option when reading "
-	      "\"%s\", but options start with a dash (-).\n",
-	      tokens[i]);
-      exit(1);
-    }
+    if (tokens[i][0] != '-')
+	  reportError(string("Expected an option when reading \"") +
+				  tokens[i] + "\", but options start with a dash (-).\n");
 
     unsigned int paramCount = 0;
     while (i + 1 + paramCount < tokenCount &&

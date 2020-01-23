@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,51 +11,43 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "GenerateIdealAction.h"
 
 #include "BigIdeal.h"
 #include "GenerateDataFacade.h"
 #include "IOFacade.h"
+#include "error.h"
+#include "DataType.h"
 
 GenerateIdealAction::GenerateIdealAction():
+  Action
+(staticGetName(),
+ "Generate a random monomial ideal.",
+ "Generate a monomial ideal. The default is to generate a random one,\n"
+ "and in certain rare cases the generated ideal may have less than the "
+ "requested\n"
+ "number of minimial generators. This can be alleviated by increasing the\n"
+ "exponent range or the number of variables.\n\n"
+ "The other types of ideals are not random, and they use the number of "
+ "variables\n"
+ "as a parameter and may thus have more generators, depending on the type.",
+ false),
+
   _type
 ("type",
- "The supported type of ideals are random, list, knight and king.",
+ "The supported types of ideals are random, list, king and knight.",
  "random"),
   _variableCount("varCount", "The number of variables.", 3),
   _generatorCount("genCount", "The number of minimal generators.", 5),
   _exponentRange
   ("expRange",
    "Exponents are chosen uniformly in the range [0,INTEGER].", 9),
-  _io(IOParameters::OutputOnly) {
-}
 
-const char* GenerateIdealAction::getName() const {
-  return "genideal";
-}
-
-const char* GenerateIdealAction::getShortDescription() const {
-  return "Generate a random monomial ideal.";
-}
-
-const char* GenerateIdealAction::getDescription() const {
-  return
-"Generate a monomial ideal. The default is to generate a random one,\n"
-"and in certain rare cases the generated ideal may have less than the requested\n"
-"number of minimial generators. This can be alleviated by increasing the\n"
-"exponent range or the number of variables.\n"
-"\n"
-"The other types of ideals are not random, and they use the number of variables\n"
-"as a parameter and may thus have more generators, depending on the type.";
-}
-
-Action* GenerateIdealAction::createNew() const {
-  return new GenerateIdealAction();
+  _io(DataType::getNullType(), DataType::getMonomialIdealType()) {
 }
 
 void GenerateIdealAction::obtainParameters(vector<Parameter*>& parameters) {
@@ -86,11 +78,14 @@ void GenerateIdealAction::perform() {
 	generator.generateKingChessIdeal(ideal, _variableCount);
   else if (type == "knight")
 	generator.generateKnightChessIdeal(ideal, _variableCount);
-  else {
-	fprintf(stderr, "ERROR: Unknown ideal type \"%s\".", type.c_str());
-	exit(1);
-  }
+  else
+	reportError("Unknown ideal type \"" + type + "\".");
 
   IOFacade ioFacade(_printActions);
-  ioFacade.writeIdeal(stdout, ideal, _io.getOutputFormat());
+  auto_ptr<IOHandler> output = _io.createOutputHandler();
+  ioFacade.writeIdeal(ideal, output.get(), stdout);
+}
+
+const char* GenerateIdealAction::staticGetName() {
+  return "genideal";
 }

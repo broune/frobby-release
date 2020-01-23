@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,16 +11,16 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "BigIdeal.h"
 
 #include "VarNames.h"
 #include "TermTranslator.h"
 #include "Ideal.h"
+#include "VarSorter.h"
 
 class OffsetTermCompare {
 public:
@@ -42,6 +42,8 @@ public:
   }
 
 private:
+  void operator=(const OffsetTermCompare&); // To make this inaccessible.
+
   const BigIdeal& _ideal;
 };
 
@@ -53,7 +55,7 @@ BigIdeal::BigIdeal(const VarNames& names):
 }
 
 void BigIdeal::insert(const Ideal& ideal) {
-  _terms.reserve(_terms.size() + ideal.getGeneratorCount());
+  reserve(_terms.size() + ideal.getGeneratorCount());
 
   Ideal::const_iterator it = ideal.begin();
   for (; it != ideal.end(); ++it) {
@@ -66,7 +68,7 @@ void BigIdeal::insert(const Ideal& ideal) {
 
 void BigIdeal::insert(const Ideal& ideal,
 					  const TermTranslator& translator) {
-  _terms.reserve(_terms.size() + ideal.getGeneratorCount());
+  reserve(_terms.size() + ideal.getGeneratorCount());
 
   Ideal::const_iterator it = ideal.begin();
   for (; it != ideal.end(); ++it) {
@@ -77,7 +79,13 @@ void BigIdeal::insert(const Ideal& ideal,
   }
 }
 
-void BigIdeal::setNames(const VarNames& names) {
+void BigIdeal::insert(const vector<mpz_class>& term) {
+  newLastTerm();
+  getLastTermRef() = term;
+}
+
+void BigIdeal::renameVars(const VarNames& names) {
+  ASSERT(names.getVarCount() == _names.getVarCount());
   _names = names;
 }
 
@@ -163,8 +171,56 @@ const vector<mpz_class>& BigIdeal::operator[](size_t index) const {
   return _terms[index];
 }
 
+bool BigIdeal::operator<(const BigIdeal& ideal) const {
+  if (getNames() < ideal.getNames())
+	return true;
+  if (ideal.getNames() < getNames())
+	return false;
+
+  for (size_t t = 0; t < _terms.size(); ++t) {
+	if (t == ideal._terms.size())
+	  return true;
+
+	const vector<mpz_class>& a = _terms[t];
+	const vector<mpz_class>& b = ideal._terms[t];
+
+	ASSERT(a.size() == b.size());
+
+	for (size_t i = 0; i < a.size(); ++i) {
+	  if (a[i] > b[i])
+		return true;
+	  if (a[i] < b[i])
+		return false;
+	}
+  }
+
+  return false;
+}
+
 bool BigIdeal::empty() const {
   return _terms.empty();
+}
+
+bool BigIdeal::containsIdentity() const {
+  for (size_t gen = 0; gen < getGeneratorCount(); ++gen) {
+	for (size_t var = 0; var < getVarCount(); ++var)
+	  if (_terms[gen][var] != 0)
+		goto notIdentity;
+	return true;
+  notIdentity:;
+  }
+  return false;
+}
+
+bool BigIdeal::contains(const vector<mpz_class>& term) const {
+  for (size_t gen = 0; gen < getGeneratorCount(); ++gen) {
+	for (size_t var = 0; var < getVarCount(); ++var)
+	  if (_terms[gen][var] > term[var])
+		goto notDivisor;
+	return true;
+  notDivisor:;
+  }
+  return false;
 }
 
 void BigIdeal::clear() {
@@ -182,6 +238,32 @@ size_t BigIdeal::getVarCount() const {
 void BigIdeal::clearAndSetNames(const VarNames& names) {
   clear();
   _names = names;
+}
+
+bool BigIdeal::addVarToClearedIdeal(const char* var) {
+  ASSERT(getGeneratorCount() == 0);
+
+  return _names.addVar(var);
+}
+
+void BigIdeal::eraseVar(size_t varToErase) {
+  ASSERT(varToErase < getVarCount());
+
+  VarNames newNames;
+  for (size_t var = 0; var < getVarCount(); ++var)
+	if (var != varToErase)
+	  newNames.addVar(_names.getName(var));
+
+  try {
+	_names = newNames;
+	for (size_t term = 0; term < getGeneratorCount(); ++term)
+	  _terms[term].erase(_terms[term].begin() + varToErase);
+  } catch (...) {
+	// To leave in valid state, which requires that _names has the same
+	// number of variables as each generator.
+	clear();
+	throw;
+  }
 }
 
 const VarNames& BigIdeal::getNames() const {
@@ -229,41 +311,6 @@ void BigIdeal::sortGenerators() {
   _terms.swap(sorted);
 }
 
-struct VarSorter {
-  VarSorter(VarNames& names):
-    _names(names),
-	_tmp(names.getVarCount()) {
-	_permutation.reserve(names.getVarCount());
-    for (size_t i = 0; i < names.getVarCount(); ++i)
-      _permutation.push_back(i);
-    sort(_permutation.begin(), _permutation.end(), *this);
-  }
-
-  bool operator()(size_t a, size_t b) const {
-    return
-      _names.getName(_permutation[a]) <
-      _names.getName(_permutation[b]);
-  }
-
-  void getOrderedNames(VarNames& names) {
-    names.clear();
-    for (size_t i = 0; i < _permutation.size(); ++i)
-      names.addVar(_names.getName(_permutation[i]));
-  }
-
-  void permute(vector<mpz_class>& term) {
-	ASSERT(term.size() == _tmp.size());
-    _tmp.swap(term);
-    for (size_t i = 0; i < _permutation.size(); ++i)
-	  mpz_swap(term[i].get_mpz_t(), _tmp[_permutation[i]].get_mpz_t());
-  }
-
-private:
-  vector<size_t> _permutation;
-  VarNames _names;
-  vector<mpz_class> _tmp;
-};
-
 void BigIdeal::sortVariables() {
   VarSorter sorter(_names);
   sorter.getOrderedNames(_names);
@@ -272,7 +319,7 @@ void BigIdeal::sortVariables() {
 }
 
 void BigIdeal::print(FILE* file) const {
-  fprintf(stderr, "/---- BigIdeal of %lu terms:\n",
+  fprintf(file, "/---- BigIdeal of %lu terms:\n",
 	  (unsigned long)_terms.size());
   for (vector<vector<mpz_class> >::const_iterator it = _terms.begin();
        it != _terms.end(); ++it) {

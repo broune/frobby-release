@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,33 +11,102 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "AnalyzeAction.h"
 
 #include "BigIdeal.h"
 #include "IOFacade.h"
 #include "IdealFacade.h"
-#include "IrreducibleDecomParameters.h"
-#include "IrreducibleDecomFacade.h"
 #include "Scanner.h"
+#include "IOHandler.h"
+#include "BigTermConsumer.h"
+#include "DataType.h"
 
 #include <algorithm>
 
+class AnalyzeConsumer : public BigTermConsumer {
+public:
+  AnalyzeConsumer():
+	_generatorCount(0) {
+  }
+
+  virtual void consumeRing(const VarNames& names) {
+	_names = names;
+	_lcm.clear();
+	_lcm.resize(_names.getVarCount());
+  }
+
+  virtual void beginConsuming() {
+  }
+
+  using BigTermConsumer::consume;
+
+  virtual void consume(const Term& term, const TermTranslator& translator) {
+	BigTermConsumer::consume(term, translator);
+  }
+
+  virtual void consume(const vector<mpz_class>& term) {
+	ASSERT(term.size() == _names.getVarCount());
+
+	++_generatorCount;
+	for (size_t var = 0; var < term.size(); ++var)
+	  if (_lcm[var] < term[var])
+		_lcm[var] = term[var];
+  }
+
+  virtual void doneConsuming() {
+  }
+
+  size_t getGeneratorCount() const {
+	return _generatorCount;
+  }
+
+  const VarNames& getNames() const {
+	return _names;
+  }
+
+  const vector<mpz_class>& getLcm() const {
+	return _lcm;
+  }
+
+  const mpz_class& getMaximumExponent() const {
+	ASSERT(_lcm.size() > 0);
+	return *max_element(_lcm.begin(), _lcm.end());
+  }
+
+private:
+  VarNames _names;
+  size_t _generatorCount;
+  vector<mpz_class> _lcm;
+};
+
 AnalyzeAction::AnalyzeAction():
+  Action
+(staticGetName(),
+ "Display information about the input ideal.",
+ "Display information about input ideal. This is useful for getting a quick\n"
+ "impression of how the ideal looks like, and it can be used in scripts\n"
+ "that need information about the ideal.",
+ false),
+
+  _io(DataType::getMonomialIdealType(), DataType::getMonomialIdealType()),
+
+  _summaryLevel
+  ("summaryLevel",
+   "If non-zero, then print a summary of the ideal to the error output\n"
+   "stream. A higher summary level results in more expensive analysis in\n"
+   "order to provide more information. Currently only level 1 is available\n"
+   "which prints the number of variables and the number of generators.",   
+   1),
+
   _printLcm
   ("lcm",
    "Print the least common multiple of the generators.",
    false),
   
-  _printLabels
-  ("label",
-   "Print the irreducible decomposition along with labels.",
-   false),
-
   _printVarCount
   ("varCount",
    "Print the number of variables.",
@@ -59,35 +128,16 @@ AnalyzeAction::AnalyzeAction():
    false) {
 }
 
-const char* AnalyzeAction::getName() const {
-  return "analyze";
-}
-
-const char* AnalyzeAction::getShortDescription() const {
-  return "Display information about the input ideal.";
-}
-
-const char* AnalyzeAction::getDescription() const {
-  return
-"Display information about input ideal. This is useful for getting a quick\n"
-"impression of how the ideal looks like, and it can be used in scripts\n"
-"that need information about the ideal.";
-}
-
-Action* AnalyzeAction::createNew() const {
-  return new AnalyzeAction();
-}
-
 void AnalyzeAction::obtainParameters(vector<Parameter*>& parameters) {
-  Action::obtainParameters(parameters);
-  _io.obtainParameters(parameters);
-
+  parameters.push_back(&_summaryLevel);
   parameters.push_back(&_printLcm);
-  parameters.push_back(&_printLabels);
   parameters.push_back(&_printVarCount);
   parameters.push_back(&_printGeneratorCount);
   parameters.push_back(&_printMaximumExponent);
   parameters.push_back(&_printMinimal);
+
+  _io.obtainParameters(parameters);
+  Action::obtainParameters(parameters);
 }
 
 void AnalyzeAction::perform() {
@@ -95,43 +145,56 @@ void AnalyzeAction::perform() {
   _io.autoDetectInputFormat(in);
   _io.validateFormats();
 
-  BigIdeal ideal;
+  AnalyzeConsumer consumer;
 
+  // We only read the entire ideal into memory at once if we have to.
   IOFacade ioFacade(_printActions);
-  ioFacade.readIdeal(in, ideal);
-
   IdealFacade idealFacade(_printActions);
-  if (_printLcm)
-	idealFacade.printLcm(stdout, ideal);
-  if (_printLabels) {
-	IrreducibleDecomParameters params;
-	IrreducibleDecomFacade irrFacade(_printActions, params);
-	irrFacade.printLabels(ideal, stdout, _io.getOutputFormat());
-  }
-  if (_printVarCount) {
-	fprintf(stdout, "%lu\n", (unsigned long)ideal.getVarCount());
-  }
-  if (_printGeneratorCount) {
-	fprintf(stdout, "%lu\n", (unsigned long)ideal.getGeneratorCount());	
-  }
-  if (_printMaximumExponent) {
-	if (ideal.getVarCount() == 0)
-	  fputs("0\n", stdout);
-	else {
-	  vector<mpz_class> lcm;
-	  ideal.getLcm(lcm);
-	  gmp_fprintf(stdout, "%Zd\n",
-				  max_element(lcm.begin(), lcm.end())->get_mpz_t());
-	}
-  }
-  if (_printMinimal) {
-	BigIdeal clone(ideal);
-	idealFacade.sortAllAndMinimize(clone);
-	if (ideal.getGeneratorCount() == clone.getGeneratorCount())
+  if (!_printMinimal) {
+	ioFacade.readIdeal(in, consumer);
+	in.expectEOF();
+  } else {
+	BigIdeal ideal;
+	ioFacade.readIdeal(in, ideal);
+	in.expectEOF();
+
+	consumer.consume(ideal);
+	
+	size_t generatorCount = ideal.getGeneratorCount();
+	idealFacade.sortAllAndMinimize(ideal);
+	if (generatorCount == ideal.getGeneratorCount())
 	  fputs("1\n", stdout);
 	else
 	  fputs("0\n", stdout);
   }
 
-  idealFacade.printAnalysis(stderr, ideal);
+  if (_printLcm) {
+	auto_ptr<IOHandler> output = _io.createOutputHandler();
+	ioFacade.writeTerm(consumer.getLcm(), consumer.getNames(),
+					   output.get(), stdout);
+	fputc('\n', stdout);
+  }
+
+  if (_printVarCount)
+	fprintf(stdout, "%lu\n", (unsigned long)consumer.getNames().getVarCount());
+  if (_printGeneratorCount)
+	fprintf(stdout, "%lu\n", (unsigned long)consumer.getGeneratorCount());	
+
+  if (_printMaximumExponent) {
+	if (consumer.getNames().getVarCount() == 0)
+	  fputs("0\n", stdout);
+	else
+	  gmp_fprintf(stdout, "%Zd\n", consumer.getMaximumExponent().get_mpz_t());
+  }
+
+  if (_summaryLevel.getIntegerValue() > 0) {
+	fprintf(stdout, "%lu generators\n",
+			(unsigned long)consumer.getGeneratorCount());
+	fprintf(stdout, "%lu variables\n",
+			(unsigned long)consumer.getNames().getVarCount());	
+  }
+}
+
+const char* AnalyzeAction::staticGetName() {
+  return "analyze";
 }

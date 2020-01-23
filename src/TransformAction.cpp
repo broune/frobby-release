@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "TransformAction.h"
 
@@ -22,11 +21,25 @@
 #include "IOFacade.h"
 #include "IdealFacade.h"
 #include "Scanner.h"
+#include "ElementDeleter.h"
+#include "VarSorter.h"
+#include "DataType.h"
+
+#include <algorithm>
 
 TransformAction::TransformAction():
+  Action
+(staticGetName(),
+ "Change the representation of the input ideal.",
+ "By default, transform simply writes the input ideals to output. A\n"
+ "number of parameters allow to transform the input ideal in various ways.",
+ false),
+
+  _io(DataType::getMonomialIdealType(), DataType::getMonomialIdealType()),
+
   _canonicalize
   ("canon",
-   "Sort generators and variables to get canonical representation.",
+   "Sort variables, generators and ideals to get canonical representation.",
    false),
 
   _sort
@@ -39,7 +52,7 @@ TransformAction::TransformAction():
    "Remove duplicate generators.",
    false),
 
-  _minimize 
+  _minimize
   ("minimize",
   "Remove non-minimial generators.",
    false),
@@ -48,29 +61,24 @@ TransformAction::TransformAction():
   ("deform",
    "Apply a generic deformation to the input ideal.",
    false),
-  
+
   _radical
   ("radical",
-   "Take the radical of the input ideal.",
-   false) {
-}
+   "Take the radical of the generators. Combine this with -minimize to\n"
+   "get rid of any non-minimal ones.",
+   false),
 
-const char* TransformAction::getName() const {
-  return "transform";
-}
+  _product
+  ("product",
+   "Replace each ideal with the product of its generators.",
+   false),
 
-const char* TransformAction::getShortDescription() const {
-  return "Change the representation of the input ideal.";
-}
-
-const char* TransformAction::getDescription() const {
-  return
-    "By default, transform simply writes the input ideal to output. A number\n"
-    "of parameters allows to transform the input ideal in varous ways.";
-}
-
-Action* TransformAction::createNew() const {
-  return new TransformAction();
+_addPurePowers
+("addPurePowers",
+ "Adds a pure power for each variable that does not already have a pure "
+ "power\nin the ideal. Each exponent is chosen to be one larger than the"
+ "maximal\nexponent of that variable that appears in the ideal.",
+ false) {
 }
 
 void TransformAction::obtainParameters(vector<Parameter*>& parameters) {
@@ -81,6 +89,8 @@ void TransformAction::obtainParameters(vector<Parameter*>& parameters) {
   parameters.push_back(&_unique);
   parameters.push_back(&_deform);
   parameters.push_back(&_radical);
+  parameters.push_back(&_product);
+  parameters.push_back(&_addPurePowers);
   Action::obtainParameters(parameters);
 }
 
@@ -91,35 +101,64 @@ void TransformAction::perform() {
 
   IOFacade facade(_printActions);
 
-  BigIdeal ideal;
-  facade.readIdeal(in, ideal);
+  vector<BigIdeal*> ideals;
+  ElementDeleter<vector<BigIdeal*> > idealsDeleter(ideals);
+  VarNames names;
 
-  IdealFacade idealFacade(_printActions);
+  facade.readIdeals(in, ideals, names);
+  in.expectEOF();
 
-  if (_radical)
-	idealFacade.takeRadical(ideal);
+  if (_product) {
+	auto_ptr<BigIdeal> ideal;
+	ideal.reset(new BigIdeal(names));
 
-  if (_minimize || _radical) {
-	if (_deform)
-	  idealFacade.sortAllAndMinimize(ideal);
-	else {
-	  idealFacade.sortAllAndMinimize(ideal, stdout,
-									 _io.getOutputFormat());
-	  return;
-	}
+	IdealFacade idealFacade(_printActions);
+	idealFacade.takeProducts(ideals, *ideal);
+
+	idealsDeleter.deleteElements();
+	exceptionSafePushBack(ideals, ideal);
   }
 
-  if (_canonicalize)
-	idealFacade.sortVariables(ideal);
+  for (size_t i = 0; i < ideals.size(); ++i) {
+	BigIdeal& ideal = *(ideals[i]);
 
-  if (_unique)
-	idealFacade.sortGeneratorsUnique(ideal);
+	IdealFacade idealFacade(_printActions);
 
-  if (_deform)
-	idealFacade.deform(ideal);
+	if (_radical)
+	  idealFacade.takeRadical(ideal);
 
-  if (_sort || _canonicalize)
-	idealFacade.sortGenerators(ideal);
+	if (_minimize)
+	  idealFacade.sortAllAndMinimize(ideal);
 
-  facade.writeIdeal(stdout, ideal, _io.getOutputFormat());
+	if (_deform)
+	  idealFacade.deform(ideal);
+
+	if (_addPurePowers)
+	  idealFacade.addPurePowers(ideal);
+
+	if (_canonicalize)
+	  idealFacade.sortVariables(ideal);
+	if (_unique)
+	  idealFacade.sortGeneratorsUnique(ideal);
+	else if (_sort || _canonicalize)
+	  idealFacade.sortGenerators(ideal);
+  }
+
+  if (_canonicalize) {
+	VarSorter sorter(names);
+	sorter.getOrderedNames(names);
+
+	sort(ideals.begin(), ideals.end(), compareIdeals);
+  }
+
+  auto_ptr<IOHandler> output(_io.createOutputHandler());
+  facade.writeIdeals(ideals, names, output.get(), stdout);
+}
+
+const char* TransformAction::staticGetName() {
+  return "transform";
+}
+
+bool TransformAction::compareIdeals(const BigIdeal* a, const BigIdeal* b) {
+  return *a < *b;
 }

@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef INTERSECT_FACADE_GUARD
 #define INTERSECT_FACADE_GUARD
 
@@ -22,12 +21,17 @@
 #include "Facade.h"
 
 class BigIdeal;
+class VarNames;
 
 class IntersectFacade : Facade {
  public:
   IntersectFacade(bool printActions);
 
-  BigIdeal* intersect(const vector<BigIdeal*>& ideals);
+  // Returns the intersection of ideals. If ideals is empty, then the
+  // whole ring is the intersection, which requires knowing the ring,
+  // and this is what names contains.
+  auto_ptr<BigIdeal> intersect(const vector<BigIdeal*>& ideals,
+							   const VarNames& names);
 };
 
 #endif

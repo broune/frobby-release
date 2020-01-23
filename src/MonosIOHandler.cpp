@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,158 +11,119 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "MonosIOHandler.h"
 
 #include "BigIdeal.h"
 #include "Scanner.h"
+#include "error.h"
+#include "BigTermConsumer.h"
+#include "DataType.h"
+
 #include <cstdio>
-#include <sstream>
 
-class MonosIdealWriter : public IdealWriter {
-public:
-  MonosIdealWriter(FILE* file, const VarNames& names):
-    IdealWriter(file, names),
-    _justStartedWritingIdeal(true) {
-    writeHeader();
-  }
-
-  MonosIdealWriter(FILE* file, const TermTranslator* translator):
-    IdealWriter(file, translator, true),
-    _justStartedWritingIdeal(true) {
-    writeHeader();
-  }
-
-  virtual ~MonosIdealWriter() {
-    fputs("\n];\n", _file);
-  }
-
-  virtual void consume(const vector<const char*>& term) {
-    writeSeparator();
-    writeTerm(term, _file);
-  }
-
-  virtual void consume(const vector<mpz_class>& term) {
-    writeSeparator();
-    writeTerm(term, _names, _file);
-  }
-
-  virtual void consume(const Term& term) {
-    writeSeparator();
-    writeTerm(term, _translator, _file);
-  }
-
-private:
-  void writeHeader() {
-    fputs("vars ", _file);
-    const char* pre = "";
-    for (unsigned int i = 0; i < _names.getVarCount(); ++i) {
-      fputs(pre, _file);
-      fputs(_names.getName(i).c_str(), _file);
-      pre = ", ";
-    }
-    fputs(";\n[", _file);
-  }
-
-  void writeSeparator() {
-    if (_justStartedWritingIdeal) {
-      _justStartedWritingIdeal = false;
-      fputs("\n", _file);
-    }
-    else
-      fputs(",\n", _file);
-  }
-
-  bool _justStartedWritingIdeal;
-};
-
-IdealWriter* MonosIOHandler::
-createWriter(FILE* file, const VarNames& names) const {
-  return new MonosIdealWriter(file, names);
+MonosIOHandler::MonosIOHandler():
+  IOHandlerCommon(staticGetName(), "Older format used by the program Monos.") {
+  registerInput(DataType::getMonomialIdealType());
+  registerInput(DataType::getMonomialIdealListType());
+  registerOutput(DataType::getMonomialIdealType());
+  registerOutput(DataType::getMonomialIdealListType());
 }
 
-IdealWriter* MonosIOHandler::
-createWriter(FILE* file, const TermTranslator* translator) const {
-  return new MonosIdealWriter(file, translator);
-}
-
-void MonosIOHandler::readIdeal(Scanner& scanner, BigIdeal& ideal) {
-  readVarsAndClearIdeal(ideal, scanner);
-  
-  scanner.expect('[');
-  if (!scanner.match(']')) {
-    do {
-      readTerm(ideal, scanner);
-    } while (scanner.match(','));
-	if (!scanner.match(']')) {
-	  if (scanner.peekIdentifier())
-		scanner.expect('*');
-	  else
-		scanner.expect(']');
-	}
-  }
-  scanner.expect(';');
-}
-
-void MonosIOHandler::readIrreducibleDecomposition(Scanner& scanner,
-												  BigIdeal& decom) {
-  readVarsAndClearIdeal(decom, scanner);
-  readIrreducibleIdealList(decom, scanner);
-}
-
-const char* MonosIOHandler::getFormatName() const {
+const char* MonosIOHandler::staticGetName() {
   return "monos";
 }
 
-void MonosIOHandler::readIrreducibleIdeal(BigIdeal& ideal, Scanner& scanner) {
-  ideal.newLastTerm();
-
-  scanner.expect('[');
-  if (scanner.match(']'))
-    return;
-
-  do
-    readVarPower(ideal.getLastTermRef(), ideal.getNames(), scanner);
-  while (scanner.match(','));
-
-  scanner.expect(']');
-}
-
-void MonosIOHandler::readIrreducibleIdealList(BigIdeal& ideals, Scanner& scanner) {
-  scanner.expect('[');
-  if (scanner.match(']'))
-    return;
-  
-  do {
-    readIrreducibleIdeal(ideals, scanner);
-  } while (scanner.match(',')); 
-
-  scanner.expect(']');
-  scanner.expect(';');
-}
-
-void MonosIOHandler::readVarsAndClearIdeal(BigIdeal& ideal, Scanner& scanner) {
-  scanner.expect("vars");
-
-  VarNames names;
-  if (!scanner.match(';')) {
-	do {
-	  const char* varName = scanner.readIdentifier();
-	  if (names.contains(varName)) {
-		scanner.printError();
-		fprintf(stderr, "The variable %s is declared twice.\n", varName);
-		exit(1);
-	  }
-	  
-	  names.addVar(varName);
-	} while (scanner.match(','));
-
-	scanner.expect(';');
+void MonosIOHandler::writeRing(const VarNames& names, FILE* out) {
+  fputs("vars ", out);
+  const char* pre = "";
+  for (unsigned int i = 0; i < names.getVarCount(); ++i) {
+	fputs(pre, out);
+	fputs(names.getName(i).c_str(), out);
+	pre = ", ";
   }
+  fputs(";\n", out);
+}
 
-  ideal.clearAndSetNames(names);
+void MonosIOHandler::writeTerm(const vector<mpz_class>& term,
+							   const VarNames& names,
+							   FILE* out) {
+  writeTermProduct(term, names, out);
+}
+
+void MonosIOHandler::writeIdealHeader(const VarNames& names,
+									  bool defineNewRing,
+									  FILE* out) {
+  writeRing(names, out);
+  fputc('[', out);
+}
+
+void MonosIOHandler::writeTermOfIdeal(const Term& term,
+									  const TermTranslator* translator,
+									  bool isFirst,
+									  FILE* out) {
+  fputs(isFirst ? "\n " : ",\n ", out);
+  IOHandler::writeTermProduct(term, translator, out);
+}
+
+void MonosIOHandler::writeTermOfIdeal(const vector<mpz_class>& term,
+									  const VarNames& names,
+									  bool isFirst,
+									  FILE* out) {
+  fputs(isFirst ? "\n " : ",\n ", out);
+  IOHandler::writeTermProduct(term, names, out);
+}
+
+void MonosIOHandler::writeIdealFooter(const VarNames& names,
+									  bool wroteAnyGenerators,
+									  FILE* out) {
+  fputs("\n];\n", out);
+}
+
+void MonosIOHandler::readRing(Scanner& in, VarNames& names) {
+  names.clear();
+  in.expect("vars");
+  if (!in.match(';')) {
+	do {
+	  names.addVarSyntaxCheckUnique(in, in.readIdentifier());
+	} while (in.match(','));
+	in.expect(';');
+  }  
+}
+
+bool MonosIOHandler::peekRing(Scanner& in) {
+  return in.peek('v');
+}
+
+void MonosIOHandler::readBareIdeal(Scanner& in,
+								   const VarNames& names,
+								   BigTermConsumer& consumer) {
+  consumer.beginConsuming(names);
+  vector<mpz_class> term(names.getVarCount());
+
+  in.expect('[');
+  if (!in.match(']')) {
+    do {
+      readTerm(in, names, term);
+	  consumer.consume(term);
+    } while (in.match(','));
+	if (!in.match(']')) {
+	  if (in.peekIdentifier())
+		in.expect('*');
+	  else
+		in.expect(']');
+	}
+  }
+  in.expect(';');
+
+  consumer.doneConsuming();
+}
+
+void MonosIOHandler::readBarePolynomial
+(Scanner& in, const VarNames& names, CoefBigTermConsumer& consumer) {
+  ASSERT(false);
+  reportInternalError("Called MonosIOHandler::readBarePolynomial.");
 }

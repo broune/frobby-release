@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef NEW_MONOS_HANDLER_IO
 #define NEW_MONOS_HANDLER_IO
 
@@ -26,19 +25,39 @@ class BigIdeal;
 
 class NewMonosIOHandler : public IOHandler {
 public:
-  virtual void readIdeal(Scanner& in, BigIdeal& ideal);
-  virtual void readIrreducibleDecomposition(Scanner& in, BigIdeal& decom);
+  NewMonosIOHandler();
 
-  virtual IdealWriter* createWriter
-    (FILE* file, const VarNames& names) const;
-  virtual IdealWriter* createWriter
-    (FILE* file, const TermTranslator* translator) const;
+  virtual void readIdeal(Scanner& in, BigTermConsumer& consumer);
+  virtual void readIdeals(Scanner& in, BigTermConsumer& consumer);
 
-  virtual const char* getFormatName() const;
+  virtual void writeTerm(const vector<mpz_class>& term,
+						 const VarNames& names,
+						 FILE* out);
 
-private:
-  void readIrreducibleIdeal(BigIdeal& ideal, Scanner& scanner);
-  void readVarsAndClearIdeal(BigIdeal& ideal, Scanner& scanner);
+  static const char* staticGetName();
+
+ private:
+  void readRingNoLeftParen(Scanner& in, VarNames& names);
+  void readIdealNoLeftParen(Scanner& in, BigTermConsumer& consumer);
+  virtual void writeRing(const VarNames& names, FILE* out);
+
+  virtual void writeIdealHeader(const VarNames& names, 
+								bool defineNewRing,
+								FILE* out);
+  virtual void writeTermOfIdeal(const Term& term,
+								const TermTranslator* translator,
+								bool isFirst,
+								FILE* out);
+  virtual void writeTermOfIdeal(const vector<mpz_class>& term,
+								const VarNames& names,
+								bool isFirst,
+								FILE* out);
+  virtual void writeIdealFooter(const VarNames& names,
+								bool wroteAnyGenerators,
+								FILE* out);
+
+  // Not supported.
+  virtual void readPolynomial(Scanner& in, CoefBigTermConsumer& consumer);
 };
 
 #endif

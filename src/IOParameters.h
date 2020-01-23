@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,43 +11,47 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef IO_PARAMETERS_GUARD
 #define IO_PARAMETERS_GUARD
 
 #include "ParameterGroup.h"
 #include "StringParameter.h"
+#include "IOHandler.h"
 
 class Scanner;
+class DataType;
 
 class IOParameters : public ParameterGroup {
  public:
-  enum Type {
-	InputOnly,
-	OutputOnly,
-	InputAndOutput
-  };
+  IOParameters(const DataType& input, const DataType& output);
 
-  IOParameters(Type type = InputAndOutput);
+  void setOutputFormat(const string& format);
 
   const string& getInputFormat() const;
   const string& getOutputFormat() const;
+
+  auto_ptr<IOHandler> createInputHandler() const;
+  auto_ptr<IOHandler> createOutputHandler() const;
 
   // If using the input format, this must be called before validating
   // the ideals, since "autodetect" is not a valid format other than
   // as a place holder for the auto detected format. If the format on
   // in is autodetect, it will (also) be set.
   void autoDetectInputFormat(Scanner& in);
+
+  // Exits with an error message if the input or output format is not
+  // known.
   void validateFormats() const;
 
  private:
-  Type _type;
+  const DataType& _inputType;
+  const DataType& _outputType;
 
-  StringParameter _inputFormat;
-  StringParameter _outputFormat;
+  auto_ptr<StringParameter> _inputFormat;
+  auto_ptr<StringParameter> _outputFormat;
 };
 
 #endif

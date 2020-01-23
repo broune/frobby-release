@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,61 +11,65 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "IrreducibleDecomAction.h"
 
 #include "BigIdeal.h"
-#include "IrreducibleDecomFacade.h"
+#include "SliceFacade.h"
 #include "IOFacade.h"
 #include "Scanner.h"
-#include "IOHandler.h"
+#include "DataType.h"
 
-const char* IrreducibleDecomAction::getName() const {
-  return "irrdecom";
-}
+IrreducibleDecomAction::IrreducibleDecomAction():
+  Action
+(staticGetName(),
+ "Compute the irreducible decomposition of the input ideal.",
+ "Compute the irredundant irreducible decomposition of the input monomial "
+ "ideal.\n\n"
+ "The decomposition is computed using the Slice Algorithm. This algorithm is\n"
+ "described in the paper `The Slice Algorithm For Irreducible Decomposition "
+ "of\n"
+ "Monomial Ideals', which is available at www.broune.com .",
+ false),
 
-const char* IrreducibleDecomAction::getShortDescription() const {
-  return "Compute the irreducible decomposition of the input ideal.";
-}
+  _encode("encode",
+		  "Encode the decomposition as monomials generating an ideal.",
+		  false),
 
-const char* IrreducibleDecomAction::getDescription() const {
-  return
-"Compute the irredundant irreducible decomposition of the input monomial ideal.\n\n"
-"The decomposition is computed using the Slice Algorithm. This algorithm is\n"
-"described in the paper `The Slice Algorithm For Irreducible Decomposition of\n"
-"Monomial Ideals', which is available at www.broune.com . It is also possible\n""to use the older Label algorithm, though this is not as efficient.";
-}
-
-Action* IrreducibleDecomAction::createNew() const {
-  return new IrreducibleDecomAction();
+  _io(DataType::getMonomialIdealType(), DataType::getMonomialIdealType()) {
 }
 
 void IrreducibleDecomAction::obtainParameters(vector<Parameter*>& parameters) {
-  Action::obtainParameters(parameters);
-  _decomParameters.obtainParameters(parameters);
   _io.obtainParameters(parameters);
+  parameters.push_back(&_encode);
+  _sliceParams.obtainParameters(parameters);
+  Action::obtainParameters(parameters);
 }
 
 void IrreducibleDecomAction::perform() {
-  Scanner in(_io.getInputFormat(), stdin);
-  _io.autoDetectInputFormat(in);
-  _io.validateFormats();
-
   BigIdeal ideal;
 
-  IOFacade ioFacade(_printActions);
-  ioFacade.readIdeal(in, ideal);
+  _sliceParams.validateSplit(true, false);
 
-  BigTermConsumer* consumer =
-	IOHandler::getIOHandler
-	(_io.getOutputFormat())->createWriter(stdout, ideal.getNames());
+  {
+	Scanner in(_io.getInputFormat(), stdin);
+	_io.autoDetectInputFormat(in);
+	_io.validateFormats();
 
-  IrreducibleDecomFacade facade(_printActions, _decomParameters);
-  facade.computeIrreducibleDecom(ideal, consumer);
+	IOFacade ioFacade(_printActions);
+	ioFacade.readIdeal(in, ideal);
+	in.expectEOF();
+  }
 
-  delete consumer;
+  auto_ptr<IOHandler> output = _io.createOutputHandler();
+  SliceFacade facade(ideal, output.get(), stdout, _printActions);
+  _sliceParams.apply(facade);
+  facade.computeIrreducibleDecomposition(_encode);
+}
+
+const char* IrreducibleDecomAction::staticGetName() {
+  return "irrdecom";
 }

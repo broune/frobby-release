@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "TranslatingTermConsumer.h"
 
@@ -23,18 +22,54 @@
 #include "BigTermConsumer.h"
 
 TranslatingTermConsumer::TranslatingTermConsumer
-(BigTermConsumer* consumer, TermTranslator* translator):
-  _consumer(consumer),
-  _translator(translator) {
-  ASSERT(consumer != 0);
-  ASSERT(translator != 0);
+(BigTermConsumer& consumer, const TermTranslator& translator):
+  _translator(translator),
+  _consumer(consumer) {
 }
 
-TranslatingTermConsumer::~TranslatingTermConsumer() {
+TranslatingTermConsumer::TranslatingTermConsumer
+(auto_ptr<BigTermConsumer> consumer, const TermTranslator& translator):
+  _translator(translator),
+  _consumer(*consumer) {
+  ASSERT(consumer.get() != 0);
+  _consumerOwner = consumer;
+}
+
+void TranslatingTermConsumer::beginConsumingList() {
+  _consumer.beginConsumingList();
+}
+
+void TranslatingTermConsumer::consumeRing(const VarNames& names) {
+  _consumer.consumeRing(names);
+}
+
+void TranslatingTermConsumer::beginConsuming() {
+  _consumer.beginConsuming();
 }
 
 void TranslatingTermConsumer::consume(const Term& term) {
-  ASSERT(term.getVarCount() == _translator->getNames().getVarCount());
+  ASSERT(term.getVarCount() == _translator.getVarCount());
 
-  _consumer->consume(term, _translator);
+  _consumer.consume(term, _translator);
+}
+
+void TranslatingTermConsumer::consume(const vector<mpz_class>& term) {
+  _consumer.consume(term);
+}
+
+void TranslatingTermConsumer::consume
+(const Term& term, const TermTranslator& translator) {
+  _consumer.consume(term, translator);
+}
+
+void TranslatingTermConsumer::doneConsuming() {
+  _consumer.doneConsuming();
+}
+
+void TranslatingTermConsumer::doneConsumingList() {
+  _consumer.doneConsumingList();
+}
+
+void TranslatingTermConsumer::consume(const BigIdeal& ideal) {
+  _consumer.consume(ideal);
 }

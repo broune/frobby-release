@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,15 +11,15 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "ParameterGroup.h"
+#include "error.h"
 
-ParameterGroup::ParameterGroup(const char* name, const char* description):
-  Parameter(name, description) {
+ParameterGroup::ParameterGroup():
+  Parameter("", "") {
 }
 
 ParameterGroup::~ParameterGroup() {
@@ -39,10 +39,9 @@ bool ParameterGroup::process(const char** params, unsigned int paramCount) {
 }
 
 void ParameterGroup::processParameters(const char** params,
-				       unsigned int paramCount) {
-  fputs("INTERNAL ERROR: Called ParameterGroup::processParameters.\n", stderr);
+									   unsigned int paramCount) {
   ASSERT(false);
-  exit(1);
+  reportInternalError("Called ParameterGroup::processParameters.");
 }
 
 void ParameterGroup::addParameter(Parameter* parameter) {
@@ -52,7 +51,7 @@ void ParameterGroup::addParameter(Parameter* parameter) {
 }
 
 void ParameterGroup::obtainParameters(vector<Parameter*>& parameters) {
-  parameters.insert(parameters.begin(),
-		    _parameters.begin(),
-		    _parameters.end());
+  parameters.insert(parameters.end(),
+					_parameters.begin(),
+					_parameters.end());
 }

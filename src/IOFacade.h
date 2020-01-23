@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef IO_FACADE_GUARD
 #define IO_FACADE_GUARD
 
@@ -23,16 +22,44 @@
 
 class BigIdeal;
 class Scanner;
+class IOHandler;
+class BigPolynomial;
+class VarNames;
+class BigTermConsumer;
 
+// TODO: Consider letting Scanner play the role of IOFacade.
 class IOFacade : private Facade {
  public:
   IOFacade(bool printActions);
 
   bool isValidMonomialIdealFormat(const string& format);
+
+  // Read an ideal from in and feed it to consumer.
+  void readIdeal(Scanner& in, BigTermConsumer& consumer);
+
+  // Read an ideal from in and place it in the parameter ideal.
   void readIdeal(Scanner& in, BigIdeal& ideal);
-  void readIdeals(Scanner& in,
-				  vector<BigIdeal*>& ideal); // inserts the read ideals
-  void writeIdeal(FILE* out, BigIdeal& ideal, const string& format);
+
+  // Insert the ideals that are read into the parameter ideals. The
+  // parameter ideals is required to be empty. Names contains the last
+  // ring read, even if there are no ideals.
+  void readIdeals(Scanner& in, vector<BigIdeal*>& ideals, VarNames& names);
+
+  void writeIdeal(const BigIdeal& ideal, IOHandler* handler, FILE* out);
+
+  void writeIdeals(const vector<BigIdeal*>& ideals,
+				   const VarNames& names,
+				   IOHandler* handler,
+				   FILE* out);
+
+  void readPolynomial(Scanner& in, BigPolynomial& polynomial);
+  void writePolynomial(const BigPolynomial& polynomial,
+					   IOHandler* handler,
+					   FILE* out);
+  void writeTerm(const vector<mpz_class>& term,
+				 const VarNames& names,
+				 IOHandler* handler,
+				 FILE* out);
 
   void readFrobeniusInstance(Scanner& in, vector<mpz_class>& instance);
   void readFrobeniusInstanceWithGrobnerBasis
@@ -41,6 +68,8 @@ class IOFacade : private Facade {
 
   bool readAlexanderDualInstance
 	(Scanner& in, BigIdeal& ideal, vector<mpz_class>& term);
+
+  void readVector(Scanner& in, vector<mpz_class>& v, size_t integerCount);
 
   bool isValidLatticeFormat(const string& format);
   void readLattice(Scanner& in, BigIdeal& ideal);

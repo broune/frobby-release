@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,53 +11,109 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "NullIOHandler.h"
 
 #include "BigIdeal.h"
+#include "NullCoefTermConsumer.h"
+#include "NullTermConsumer.h"
+#include "BigPolynomial.h"
+#include "VarNames.h"
+#include "DataType.h"
 
-class NullIdealWriter : public IdealWriter {
-public:
-  NullIdealWriter() {
-  }
+NullIOHandler::NullIOHandler():
+  IOHandler(staticGetName(), "Ignores input and produces no output.", false) {
+  registerInput(DataType::getMonomialIdealType());
+  registerInput(DataType::getPolynomialType());
+  registerInput(DataType::getMonomialIdealListType());
 
-  virtual ~NullIdealWriter() {
-  }
-
-  virtual void consume(const vector<mpz_class>& term) {
-  }
-
-  virtual void consume(const Term& term) {
-  }
-};
-
-IdealWriter* NullIOHandler::
-createWriter(FILE* file, const VarNames& names) const {
-  return new NullIdealWriter();
+  registerOutput(DataType::getMonomialIdealType());
+  registerOutput(DataType::getPolynomialType());
+  registerOutput(DataType::getMonomialIdealListType());
 }
 
-IdealWriter* NullIOHandler::
-createWriter(FILE* file, const TermTranslator* translator) const {
-  return new NullIdealWriter();
+const char* NullIOHandler::staticGetName() {
+  return "null";
+}
+
+void NullIOHandler::readIdeal(Scanner& in, BigTermConsumer& consumer) {
+}
+
+void NullIOHandler::readIdeals(Scanner& in, BigTermConsumer& consumer) {
+}
+
+void NullIOHandler::writeRing(const VarNames& names, FILE* out) {
+}
+
+void NullIOHandler::writeTerm(const vector<mpz_class>& term,
+							  const VarNames& names,
+							  FILE* out) {
+}
+
+auto_ptr<BigTermConsumer> NullIOHandler::createIdealWriter
+(TermTranslator* translator, FILE* file) {
+  return auto_ptr<BigTermConsumer>(new NullTermConsumer());
+}
+
+void NullIOHandler::writePolynomialHeader(const VarNames& names, FILE* out) {
+}
+
+void NullIOHandler::writeTermOfPolynomial(const mpz_class& coef,
+										  const Term& term,
+										  const TermTranslator* translator,
+										  bool isFirst,
+										  FILE* out) {
+}
+void NullIOHandler::writeTermOfPolynomial(const mpz_class& coef,
+										  const vector<mpz_class>& term,
+										  const VarNames& names,
+										  bool isFirst,
+										  FILE* out) {
+}
+
+void NullIOHandler::writePolynomialFooter(const VarNames& names,
+										  bool wroteAnyGenerators,
+										  FILE* out) {
+}
+
+void NullIOHandler::writeIdealHeader(const VarNames& names,
+									 bool defineNewRing,
+									 FILE* out) {
+}
+
+void NullIOHandler::writeTermOfIdeal(const Term& term,
+									 const TermTranslator* translator,
+									 bool isFirst,
+									 FILE* out) {
+}
+
+void NullIOHandler::writeTermOfIdeal(const vector<mpz_class>& term,
+									 const VarNames& names,
+									 bool isFirst,
+									 FILE* out) {
+}
+
+void NullIOHandler::writeIdealFooter(const VarNames& names,
+									 bool wroteAnyGenerators,
+									 FILE* out) {
+}
+
+auto_ptr<CoefBigTermConsumer> NullIOHandler::createPolynomialWriter
+(const TermTranslator* translator, FILE* out) {
+  return auto_ptr<CoefBigTermConsumer>(new NullCoefTermConsumer());
 }
 
 void NullIOHandler::readIdeal(Scanner& scanner, BigIdeal& ideal) {
-  VarNames names;
-  ideal.clearAndSetNames(names);
-}
-
-void NullIOHandler::readIrreducibleDecomposition(Scanner& scanner,
-												 BigIdeal& decom) {
+  ideal.clearAndSetNames(VarNames());
 }
 
 bool NullIOHandler::hasMoreInput(Scanner& scanner) const {
   return false;
 }
 
-const char* NullIOHandler::getFormatName() const {
-  return "null";
+void NullIOHandler::readPolynomial
+(Scanner& in, CoefBigTermConsumer& consumer) {
 }

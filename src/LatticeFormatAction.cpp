@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "LatticeFormatAction.h"
 
@@ -23,12 +22,20 @@
 #include "fplllIO.h"
 #include "LatticeFacade.h"
 #include "Scanner.h"
+#include "error.h"
 
 LatticeFormatAction::LatticeFormatAction():
-  _inputFormat
-("iformat",
- "The input format. The available formats are 4ti2 and fplll.",
- "4ti2"),
+Action
+(staticGetName(),
+ "Change the representation of the input lattice.",
+ "By default, latformat simply writes the input lattice to output.\n"
+ "The main functionality is to change the format.",
+ false),
+
+_inputFormat
+  ("iformat",
+   "The input format. The available formats are 4ti2 and fplll.",
+   "4ti2"),
   
   _outputFormat
   ("oformat",
@@ -39,24 +46,6 @@ LatticeFormatAction::LatticeFormatAction():
   ("zero",
    "Adjust lattice basis to increase the number of zero entries.",
    false) {
-}
-
-const char* LatticeFormatAction::getName() const {
-  return "latformat";
-}
-
-const char* LatticeFormatAction::getShortDescription() const {
-  return "Change the representation of the input lattice.";
-}
-
-const char* LatticeFormatAction::getDescription() const {
-  return
-    "By default, latformat simply writes the input lattice to output.\n"
-    "The main functionality is to change the format.";
-}
-
-Action* LatticeFormatAction::createNew() const {
-  return new LatticeFormatAction();
 }
 
 void LatticeFormatAction::obtainParameters(vector<Parameter*>& parameters) {
@@ -75,19 +64,15 @@ void LatticeFormatAction::perform() {
 
   IOFacade facade(_printActions);
 
-  if (!facade.isValidLatticeFormat(iformat)) {
-    fprintf(stderr, "ERROR: Unknown input format \"%s\".\n", iformat.c_str());
-    exit(1);
-  }
-
-  if (!facade.isValidLatticeFormat(oformat)) {
-    fprintf(stderr, "ERROR: Unknown output format \"%s\".\n", oformat.c_str());
-    exit(1);
-  }
+  if (!facade.isValidLatticeFormat(iformat))
+	reportError("Unknown lattice input format \"" + iformat + "\".");
+  if (!facade.isValidLatticeFormat(oformat))
+	reportError("Unknown lattice output format \"" + oformat + "\".");
 
   BigIdeal basis;
   Scanner in(iformat, stdin);
   facade.readLattice(in, basis);
+  in.expectEOF();
 
   if (_zero) {
     LatticeFacade latticeFacade(_printActions);
@@ -95,4 +80,8 @@ void LatticeFormatAction::perform() {
   }
 
   facade.writeLattice(stdout, basis, oformat);
+}
+
+const char* LatticeFormatAction::staticGetName() {
+  return "latformat";
 }

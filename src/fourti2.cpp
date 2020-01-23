@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,16 +11,16 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "fourti2.h"
 
 #include "BigIdeal.h"
 #include "Scanner.h"
 #include "IOHandler.h"
+#include "error.h"
 
 namespace fourti2 {
   void readTerm(BigIdeal& ideal, Scanner& scanner) {
@@ -29,12 +29,10 @@ namespace fourti2 {
     mpz_class tmp;
     scanner.readIntegerAndNegativeAsZero(tmp);
 
-    if (tmp > 0) {
-      fputs("ERROR: Encountered positive entry as first entry in term.\n"
-	    "This is impossible if using the required degree reverse "
-	    "lexicographic term order.\n", stderr);
-      exit(1);
-    }
+    if (tmp > 0)
+	  reportError("Encountered positive entry as first entry in term. "
+				  "This is impossible if using the required degree reverse "
+				  "lexicographic term order.\n");
 
     for (size_t i = 0; i < ideal.getVarCount(); ++i) {
       scanner.readIntegerAndNegativeAsZero(tmp);
@@ -49,6 +47,11 @@ namespace fourti2 {
 
     scanner.readSizeT(termCount);
     scanner.readSizeT(varCount);
+
+	if (varCount == 0)
+	  reportError
+		("The matrix defining the Frobenius-related Grobner basis must "
+		 "have at least one column, and this one has none.");
 
     VarNames names(varCount - 1);
     basis.clearAndSetNames(names);

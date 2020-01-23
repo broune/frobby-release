@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,72 +11,68 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef SLICE_STRATEGY_GUARD
 #define SLICE_STRATEGY_GUARD
 
-#include <string>
-#include "TermConsumer.h"
-
 class Slice;
 class Term;
-class TermTranslator;
-class Projection;
+class SliceEvent;
 class Ideal;
-class TermGrader;
 
-class SliceStrategy : public TermConsumer {
+// This class describes the interface of a strategy object for the
+// Slice Algorithm. It determines what goes on when the algorithm
+// runs, allowing to specialize the algorithm to do several different
+// computations.
+class SliceStrategy {
  public:
   virtual ~SliceStrategy();
 
-  virtual void initialize(const Slice& slice);
+  // This method should only be called before calling beginComputing().
+  virtual void setUseIndependence(bool use) = 0;
 
-  // *** Methods for handling independence splits
-  virtual void doingIndependenceSplit(const Slice& slice,
-									  Ideal* mixedProjectionSubtract) = 0;
-  virtual void doingIndependentPart(const Projection& projection,
-									bool last) = 0;
-  virtual bool doneWithIndependentPart() = 0;
-  virtual void doneWithIndependenceSplit() = 0;
+  // This returns a slice based on ideal, which can be used to start
+  // the computation off. This method should only be called once per
+  // strategy, and it should be called before split().
+  virtual auto_ptr<Slice> beginComputing(const Ideal& ideal) = 0;
 
-  // *** Methods to inform debug strategies when the algorothm starts
-  // processing the content of a slice and when it stops.
-  virtual void startingContent(const Slice& slice);
-  virtual void endingContent();
+  // This should be called once after computation is done, and then no
+  // more methods other than the destructor should be called.
+  virtual void doneComputing() = 0;
 
-  // *** Methods for handling pivot and label splits
+  // Performs a split of slice and puts the output into the remaining
+  // four parameters. The strategy takes over ownership of slice,
+  // while passing on ownership of leftSlice and rightSlice. Ownership
+  // of leftEvent and rightEvent is not passed on, though it is
+  // required that if non-null, then their dispose() method must be
+  // called eventually.
+  //
+  // The parameter slice must have been obtained through a method of
+  // this strategy - it must not have been allocated using new or by a
+  // different strategy.
+  //
+  // The algorithm must process rightSlice first, then raise
+  // rightEvent, then process leftSlice and finally raise leftEvent.
+  // Processing includes processing any child slices generated from
+  // further splits. Any of leftEvent, leftSlice, rightEvent and
+  // rightSlice can be 0 after split returns, in which case that
+  // output is to be ignored.
+  //
+  // leftEvent, leftSlice, rightEvent and rightSlice are only used to
+  // produce output from split. To make this point clear, they are
+  // required to be 0 when split gets called. Slice is not allowed to
+  // be 0.
+  virtual void split(auto_ptr<Slice> slice,
+					 SliceEvent*& leftEvent, auto_ptr<Slice>& leftSlice,
+					 SliceEvent*& rightEvent, auto_ptr<Slice>& rightSlice) = 0;
 
-  enum SplitType {
-    LabelSplit = 1,
-    PivotSplit = 2
-  };
-  virtual SplitType getSplitType(const Slice& slice) = 0;
-
-  virtual void getPivot(Term& pivot, Slice& slice);
-  virtual size_t getLabelSplitVariable(const Slice& slice);
-
-  // report a msm to the strategy.
-  virtual void consume(const Term& term) = 0;
-
-  // Simplifies the slice prior to a split.
-  virtual void simplify(Slice& slice);
-
-
-  // *** Static methods to create strategies.
-
-  // These report an error and exit the program if the name is unknown.
-  static SliceStrategy* newDecomStrategy(const string& name,
-										 TermConsumer* consumer);
-  static SliceStrategy* newFrobeniusStrategy(const string& name,
-											 TermConsumer* consumer,
-											 TermGrader& grader,
-											 bool useBound);
-
-  static SliceStrategy* addStatistics(SliceStrategy* strategy);
-  static SliceStrategy* addDebugOutput(SliceStrategy* strategy);
+  // It is allowed to delete returned slices directly, but it is
+  // better to use freeSlice. freeSlice can only be called on slices
+  // obtained from a method of the same strategy. This allows caching
+  // of slices to avoid frequent allocations and deallocation.
+  virtual void freeSlice(auto_ptr<Slice> slice) = 0;
 };
 
 #endif

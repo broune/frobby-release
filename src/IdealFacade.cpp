@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "IdealFacade.h"
 
@@ -22,6 +21,12 @@
 #include "Ideal.h"
 #include "TermTranslator.h"
 #include "IOHandler.h"
+#include "SliceAlgorithm.h"
+#include "IOFacade.h"
+#include "Macaulay2IOHandler.h"
+#include "CanonicalCoefTermConsumer.h"
+#include "error.h"
+#include "FrobbyStringStream.h"
 
 IdealFacade::IdealFacade(bool printActions):
   Facade(printActions) {
@@ -34,7 +39,7 @@ void IdealFacade::deform(BigIdeal& bigIdeal) {
 
   // Reduce range of exponents
   Ideal ideal(bigIdeal.getVarCount());
-  TermTranslator translator(bigIdeal, ideal, true);
+  TermTranslator translator(bigIdeal, ideal, false);
   bigIdeal.clear();
   bigIdeal.insert(ideal);
 
@@ -47,13 +52,46 @@ void IdealFacade::takeRadical(BigIdeal& bigIdeal) {
   bigIdeal.takeRadical();
 
   Ideal ideal(bigIdeal.getVarCount());
-  TermTranslator translator(bigIdeal, ideal, true);
+  TermTranslator translator(bigIdeal, ideal, false);
   bigIdeal.clear();
 
-  ideal.minimize();
-  ideal.sortReverseLex();
-
   bigIdeal.insert(ideal, translator);
+
+  endAction();
+}
+
+void IdealFacade::takeProducts(const vector<BigIdeal*>& ideals,
+							   BigIdeal& ideal) {
+  beginAction("Taking products.");
+
+  size_t idealCount = ideals.size();
+  for (size_t i = 0; i < idealCount; ++i) {
+	ASSERT(ideals[i] != 0);
+
+	if (!(ideal.getNames() == ideals[i]->getNames())) {
+	  FrobbyStringStream errorMsg;
+	  errorMsg <<
+		"Taking products of ideals in rings with different variable lists.\n";
+	  
+	  string list;
+	  ideal.getNames().toString(list);
+	  errorMsg << "One ring has variables\n  " << list << ",\n";
+	  
+	  ideals[i]->getNames().toString(list);
+	  errorMsg << "while another has variables\n  " << list <<
+		".\nContact the Frobby developers if you need this functionality.";
+
+	  reportError(errorMsg);
+	}
+
+	size_t genCount = ideals[i]->getGeneratorCount();
+	size_t varCount = ideals[i]->getVarCount();
+
+	ideal.newLastTerm();
+	for (size_t t = 0; t < genCount; ++t)
+	  for (size_t var = 0; var < varCount; ++var)
+		ideal.getLastTermExponentRef(var) += (*ideals[i])[t][var];
+  }
 
   endAction();
 }
@@ -62,7 +100,7 @@ void IdealFacade::sortAllAndMinimize(BigIdeal& bigIdeal) {
   beginAction("Minimizing ideal.");
 
   Ideal ideal(bigIdeal.getVarCount());
-  TermTranslator translator(bigIdeal, ideal, true);
+  TermTranslator translator(bigIdeal, ideal, false);
   bigIdeal.clear();
 
   ideal.minimize();
@@ -73,23 +111,20 @@ void IdealFacade::sortAllAndMinimize(BigIdeal& bigIdeal) {
   endAction();
 }
 
-void IdealFacade::sortAllAndMinimize(BigIdeal& bigIdeal, FILE* out,
-									 const string& format) {
-  beginAction("Minimizing and writing ideal.");
+void IdealFacade::addPurePowers(BigIdeal& bigIdeal) {
+  vector<mpz_class> lcm;
+  bigIdeal.getLcm(lcm);
 
-  Ideal ideal(bigIdeal.getVarCount());
-  TermTranslator translator(bigIdeal, ideal, true);
-  bigIdeal.clear();
+  vector<mpz_class> purePower(bigIdeal.getVarCount());
+  for (size_t var = 0; var < bigIdeal.getVarCount(); ++var) {
+	purePower[var] = lcm[var] + 1;
+	if (!bigIdeal.contains(purePower))
+	  bigIdeal.insert(purePower);
 
-  ideal.minimize();
-  ideal.sortReverseLex();
+	ASSERT(bigIdeal.contains(purePower));
 
-  IOHandler* handler = IOHandler::getIOHandler(format);
-  ASSERT(handler != 0);
-  
-  handler->writeIdeal(out, ideal, &translator);
-
-  endAction();
+	purePower[var] = 0;
+  }
 }
 
 void IdealFacade::sortGeneratorsUnique(BigIdeal& ideal) {
@@ -109,80 +144,37 @@ void IdealFacade::sortGenerators(BigIdeal& ideal) {
 }
 
 void IdealFacade::sortVariables(BigIdeal& ideal) {
-  beginAction("Sorting generators.");
+  beginAction("Sorting variables.");
 
   ideal.sortVariables();
 
   endAction();
 }
 
+// TODO: decide what to do with this.
 void IdealFacade::printAnalysis(FILE* out, BigIdeal& bigIdeal) {
   beginAction("Computing and printing analysis.");
 
-  fprintf(out, "%u generators\n", (unsigned int)bigIdeal.getGeneratorCount());
-  fprintf(out, "%u variables\n", (unsigned int)bigIdeal.getVarCount());
-
   Ideal ideal(bigIdeal.getVarCount());
-  TermTranslator translator(bigIdeal, ideal, true);
+  TermTranslator translator(bigIdeal, ideal, false);
 
   fprintf(out, "is strongly generic: %s",
 		  ideal.isStronglyGeneric() ? "yes" : "no");
 
-/*
-TODO:
-
-CHEAP
-square-free
-canonical
-partition
-lcm exponent vector
-gcd exponent vector
-sparsity
-
-EXPENSIVE
-minimized
-
-MORE EXPENSIVE
-weakly generic (could this be done efficiently?)
-
-VERY EXPENSIVE
-size of irreducible decomposition
-strongly cogeneric
-dimension
-degree
-
-EVEN MORE EXPENSIVE
-weakly cogeneric
-
-EVEN EVEN MORE EXPENSIVE
-self Alexander dual
-
-*/
-
   endAction();
 }
 
-void IdealFacade::printLcm(FILE* out, BigIdeal& ideal) {
+void IdealFacade::printLcm(BigIdeal& ideal,
+						   IOHandler* handler,
+						   FILE* out) {
   beginAction("Computing lcm");
 
-  // TODO: integrate this with the regular IO system
   vector<mpz_class> lcm;
   ideal.getLcm(lcm);
-  if (lcm == vector<mpz_class>(lcm.size()))
-	fputs("1\n", out);
-  else {
-	const char* pre = "";
-	for (size_t var = 0; var < ideal.getVarCount(); ++var) {
-	  if (lcm[var] == 0)
-		continue;
-	  gmp_fprintf(out, lcm[var] == 1 ? "%s%s" : "%s%s^%Zd",
-				  pre,
-				  ideal.getNames().getName(var).c_str(),
-				  lcm[var].get_mpz_t());
-	  pre = "*";
-	}
-	fputc('\n', out);
-  }
-  
+
+  IOFacade ioFacade(isPrintingActions());
+  ioFacade.writeTerm(lcm, ideal.getNames(), handler, out);
+  fputc('\n', out);
+
   endAction();
 }

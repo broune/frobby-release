@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "IOFacade.h"
 
@@ -23,6 +22,12 @@
 #include "BigIdeal.h"
 #include "fplllIO.h"
 #include "Scanner.h"
+#include "ElementDeleter.h"
+#include "error.h"
+#include "FrobbyStringStream.h"
+#include "BigTermRecorder.h"
+#include "CoefBigTermConsumer.h"
+#include "CoefBigTermRecorder.h"
 
 #include <iterator>
 
@@ -33,48 +38,133 @@ IOFacade::IOFacade(bool printActions):
 bool IOFacade::isValidMonomialIdealFormat(const string& format) {
   beginAction("Validating monomial ideal format name.");
 
-  IOHandler* handler = IOHandler::getIOHandler(format);
-  bool valid = (handler != 0);
+  bool valid = (IOHandler::createIOHandler(format).get() != 0);
 
   endAction();
 
   return valid;
 }
 
+void IOFacade::readIdeal(Scanner& in, BigTermConsumer& consumer) {
+  beginAction("Reading monomial ideal.");
+
+  auto_ptr<IOHandler> handler(in.createIOHandler());
+  ASSERT(handler.get() != 0);
+
+  handler->readIdeal(in, consumer);
+
+  endAction();
+}
+
 void IOFacade::readIdeal(Scanner& in, BigIdeal& ideal) {
   beginAction("Reading monomial ideal.");
 
-  IOHandler* handler = in.getIOHandler();
-  ASSERT(handler != 0);
+  auto_ptr<IOHandler> handler(in.createIOHandler());
+  ASSERT(handler.get() != 0);
 
-  handler->readIdeal(in, ideal);
+  BigTermRecorder recorder;
+  handler->readIdeal(in, recorder);
+
+  // TODO: return value instead of this copy.
+  ASSERT(!recorder.empty());
+  ideal = *(recorder.releaseIdeal());
+  ASSERT(recorder.empty());
 
   endAction();
 }
 
-void IOFacade::readIdeals(Scanner& in, vector<BigIdeal*>& ideals) {
+void IOFacade::readIdeals(Scanner& in,
+						  vector<BigIdeal*>& ideals,
+						  VarNames& names) {
   beginAction("Reading monomial ideals.");
 
-  IOHandler* handler = in.getIOHandler();
-  ASSERT(handler != 0);
+  // To make it clear what needs to be deleted in case of an exception.
+  ASSERT(ideals.empty());
+  ElementDeleter<vector<BigIdeal*> > idealsDeleter(ideals);
 
-  while (handler->hasMoreInput(in)) {
-    BigIdeal* ideal = new BigIdeal();
-	handler->readIdeal(in, *ideal);
-    ideals.push_back(ideal);
-  }
+  auto_ptr<IOHandler> handler(in.createIOHandler());
+
+  BigTermRecorder recorder;
+  handler->readIdeals(in, recorder);
+
+  names = recorder.getRing();
+  while (!recorder.empty())
+	exceptionSafePushBack(ideals, recorder.releaseIdeal());
+
+  idealsDeleter.release();
 
   endAction();
 }
 
-
-void IOFacade::writeIdeal(FILE* out, BigIdeal& ideal, const string& format) {
-  beginAction("Writing monomial ideal.");
-
-  IOHandler* handler = IOHandler::getIOHandler(format);
+void IOFacade::writeIdeal(const BigIdeal& ideal,
+						  IOHandler* handler,
+						  FILE* out) {
   ASSERT(handler != 0);
 
-  handler->writeIdeal(out, ideal);
+  beginAction("Writing monomial ideal.");
+
+  handler->createIdealWriter(out)->consume(ideal);
+
+  endAction();
+}
+
+void IOFacade::writeIdeals(const vector<BigIdeal*>& ideals,
+						   const VarNames& names,
+						   IOHandler* handler,
+						   FILE* out) {
+  ASSERT(handler != 0);
+
+  beginAction("Writing monomial ideals.");
+
+  {
+	auto_ptr<BigTermConsumer> consumer = handler->createIdealWriter(out);
+
+	consumer->beginConsumingList();
+	consumer->consumeRing(names);
+
+	for (vector<BigIdeal*>::const_iterator it = ideals.begin();
+		 it != ideals.end(); ++it)
+	  consumer->consume(**it);
+
+	consumer->doneConsumingList();
+  }
+
+  endAction();  
+}
+
+void IOFacade::readPolynomial(Scanner& in, BigPolynomial& polynomial) {
+
+  beginAction("Reading polynomial.");
+
+  auto_ptr<IOHandler> handler(in.createIOHandler());
+  ASSERT(handler.get() != 0);
+
+  CoefBigTermRecorder recorder(&polynomial);
+  handler->readPolynomial(in, recorder);
+
+  endAction();
+}
+
+void IOFacade::writePolynomial(const BigPolynomial& polynomial,
+							   IOHandler* handler,
+							   FILE* out) {
+  ASSERT(handler != 0);
+  ASSERT(out != 0);
+
+  beginAction("Writing polynomial.");
+
+  handler->createPolynomialWriter(out)->consume(polynomial);
+
+  endAction();
+}
+
+void IOFacade::writeTerm(const vector<mpz_class>& term,
+						 const VarNames& names,
+						 IOHandler* handler,
+						 FILE* out) {
+  beginAction("Writing monomial.");
+
+  handler->writeTerm(term, names, out);
 
   endAction();
 }
@@ -83,10 +173,16 @@ bool IOFacade::readAlexanderDualInstance
 (Scanner& in, BigIdeal& ideal, vector<mpz_class>& term) {
   beginAction("Reading Alexander dual input.");
 
-  IOHandler* handler = in.getIOHandler();
-  ASSERT(handler != 0);
+  auto_ptr<IOHandler> handler(in.createIOHandler());
+  ASSERT(handler.get() != 0);
 
-  handler->readIdeal(in, ideal);
+  BigTermRecorder recorder;
+  handler->readIdeal(in, recorder);
+
+  // TODO: return value instead of this copy.
+  ASSERT(!recorder.empty());
+  ideal = *(recorder.releaseIdeal());
+  ASSERT(recorder.empty());
 
   bool pointSpecified = false;
   if (handler->hasMoreInput(in)) {
@@ -97,6 +193,17 @@ bool IOFacade::readAlexanderDualInstance
   endAction();  
 
   return pointSpecified;
+}
+
+void IOFacade::readVector
+(Scanner& in, vector<mpz_class>& v, size_t integerCount) {
+  beginAction("Reading vector.");
+
+  v.resize(integerCount);
+  for (size_t i = 0; i < integerCount; ++i)
+	in.readInteger(v[i]);
+
+  endAction();
 }
 
 void IOFacade::
@@ -117,13 +224,21 @@ void IOFacade::readFrobeniusInstanceWithGrobnerBasis
 
   if (instance.size() != ideal.getVarCount() + 1) {
     if (instance.empty())
-      fputs("ERROR: There is no Frobenius instance at end of input.\n",
-			stderr);
-    else
-      fputs("ERROR: The Frobenius instance at end of input does not have the\n"
-			"amount of numbers that the first part of the input indicates.\n",
-			stderr);
-    exit(1);
+	  reportSyntaxError
+		(in, "The Grobner basis is not followed by a Frobenius instance.");
+    else {
+	  // Note that we add one since the first entry of the rows encoding
+	  // the Grobner basis is chopped off.	  
+	  FrobbyStringStream errorMsg;
+	  errorMsg << "The Grobner basis has "
+			   << ideal.getVarCount() + 1
+			   << " entries, and the Frobenius instance should then also have "
+			   << ideal.getVarCount() + 1
+			   << " entries, but in fact it has "
+			   << instance.size() 
+			   << " entries.";
+		reportSyntaxError(in, errorMsg);
+	}
   }
 
   endAction();

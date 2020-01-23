@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "Term.h"
 
@@ -23,6 +22,11 @@ const unsigned int ObjectPoolSize = 1000;
 
 struct ObjectPool {
   ObjectPool(): objectsStored(0), objects(0) {}
+
+  void ensureInit() {
+	if (objects == 0)
+	  objects = new Exponent*[ObjectPoolSize];
+  }
 
   bool empty() const {
     return objectsStored == 0;
@@ -40,13 +44,12 @@ struct ObjectPool {
 
   void addObject(Exponent* object) {
     ASSERT(canStoreMore());
+	ASSERT(objects != 0);
 
-    if (objects == 0)
-      objects = new Exponent*[ObjectPoolSize];
     objects[objectsStored] = object;
     ++objectsStored;
   }
-  
+
   ~ObjectPool() {
     if (objects == 0)
       return;
@@ -62,10 +65,13 @@ struct ObjectPool {
 Exponent* Term::allocate(size_t size) {
   ASSERT(size > 0);
 
-  if (size < PoolCount && !pools[size].empty())
-    return pools[size].removeObject();
-  else
-    return new Exponent[size];  
+  if (size < PoolCount) {
+	pools[size].ensureInit();
+	if (!pools[size].empty())
+	  return pools[size].removeObject();
+  }
+
+  return new Exponent[size];  
 }
 
 void Term::deallocate(Exponent* p, size_t size) {

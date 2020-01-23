@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,14 +11,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "Minimizer.h"
 
 #include "Term.h"
+#include <algorithm>
 
 typedef vector<Exponent*>::iterator iterator;
 
@@ -235,7 +235,7 @@ Minimizer::iterator Minimizer::minimize(iterator begin, iterator end) const {
   if (distance(begin, end) < 1000 || _varCount == 0)
 	return simpleMinimize(begin, end, _varCount);
 
-  static vector<Exponent*> terms;
+  vector<Exponent*> terms;
   terms.clear();
   terms.reserve(distance(begin, end));
 

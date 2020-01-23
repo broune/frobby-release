@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,42 +11,99 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
+#include "main.h"
+
 #include "Action.h"
+#include "DebugAllocator.h"
+#include "error.h"
 
-int main(int argc, const char** argv) {
-#ifdef DEBUG
-  fputs("This is a DEBUG build of Frobby. It is therefore SLOW.\n", stderr);
-  fflush(stderr);
-#endif
-#ifdef PROFILE
-  fputs("This is a PROFILE build of Frobby. It is therefore SLOW.\n", stderr);
-  fflush(stderr);
-#endif
+#include <ctime>
+#include <cstdlib>
 
-  srand(time(0));
-
-  string actionName = "help";
+int frobbyMain(int argc, const char** argv) {
+  string prefix;
   if (argc > 1) {
-    actionName = argv[1];
-    --argc;
-    ++argv;
-  }
+	prefix = argv[1];
+	--argc;
+	++argv;
+  } else
+	prefix = "help";
 
-  Action* action = Action::createAction(actionName);
-
-  if (action == 0) {
-    fprintf(stderr, "ERROR: Unknown action \"%s\".\n", actionName.c_str());
-    return 1;
-  }
-
+  const auto_ptr<Action> action(Action::createActionWithPrefix(prefix));
   action->parseCommandLine(argc - 1, argv + 1);
   action->perform();
-  delete action;
 
-  return 0;
+  return ExitCodeSuccess;
+}
+
+// A replacement for the default C++ built-in terminate() function. Do
+// not call this method or cause it to be called.
+void frobbyTerminate() {
+  fputs("INTERNAL ERROR: Something caused terminate() to be called. "
+		"This should never happen - please contact the Frobby developers.\n",
+		stderr);
+  fflush(stderr);
+  abort();
+}
+
+// A replacement for the default C++ built-in unexpected()
+// function. Do not call this method or cause it to be called.
+void frobbyUnexpected() {
+  fputs("INTERNAL ERROR: Something caused unexpected() to be called. "
+		"This should never happen - please contact the Frobby developers.\n",
+		stderr);
+  fflush(stderr);
+  abort();
+}
+
+int main(int argc, const char** argv) {
+  try {
+	set_terminate(frobbyTerminate);
+	set_unexpected(frobbyUnexpected);
+
+	srand((unsigned int)time(0) +
+#ifdef __GNUC__ // Only GCC defines this macro.
+		  (unsigned int)getpid() +
+#endif
+		  (unsigned int)clock());
+
+#ifdef PROFILE
+	fputs("This is a PROFILE build of Frobby. It is therefore SLOW.\n",
+		  stderr);
+#endif
+#ifdef DEBUG
+	fputs("This is a DEBUG build of Frobby. It is therefore SLOW.\n",
+		  stderr);
+#endif
+
+
+
+#ifdef DEBUG
+	return DebugAllocator::getSingleton().runDebugMain(argc, argv);
+#else
+	return frobbyMain(argc, argv);
+#endif
+  } catch (const bad_alloc&) {
+	reportErrorNoThrow("Ran out of memory.");
+	return ExitCodeOutOfMemory;
+  } catch (const InternalFrobbyException& e) {
+	reportErrorNoThrow(e);
+	return ExitCodeInternalError;
+  } catch (const FrobbyException& e) {
+	reportErrorNoThrow(e);
+	return ExitCodeError;
+  } catch (...) {
+	reportErrorNoThrow("An unexpected error occured.");
+	try {
+	  throw;
+	} catch (const exception& e) {
+	  reportErrorNoThrow(e.what());
+	} catch (...) {
+	}
+	return ExitCodeUnknownError;
+  }
 }

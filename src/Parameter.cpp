@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,15 +11,16 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #include "stdinc.h"
 #include "Parameter.h"
+#include "error.h"
+#include "FrobbyStringStream.h"
 
 Parameter::Parameter(const char* name,
-		     const char* description):
+					 const char* description):
   _name(name),
   _description(description) {
 }
@@ -28,11 +29,11 @@ Parameter::~Parameter() {
 }
 
 const char* Parameter::getName() const {
-  return _name;
+  return _name.c_str();
 }
 
 const char* Parameter::getDescription() const {
-  return _description;
+  return _description.c_str();
 }
 
 const char* Parameter::getParameterName() const {
@@ -40,7 +41,7 @@ const char* Parameter::getParameterName() const {
 }
 
 bool Parameter::process(const char** params, unsigned int paramCount) {
-  if (string(_name) != params[0])
+  if ('-' + string(_name) != params[0])
     return false;
 
   processParameters(params + 1, paramCount - 1);
@@ -48,43 +49,49 @@ bool Parameter::process(const char** params, unsigned int paramCount) {
 }
 
 void Parameter::checkCorrectParameterCount(unsigned int from,
-					   unsigned int to,
-					   const char** params,
-					   unsigned int paramCount) {
+										   unsigned int to,
+										   const char** params,
+										   unsigned int paramCount) {
   if (from <= paramCount && paramCount <= to)
     return;
 
-  fprintf(stderr, "ERROR: Option -%s takes ", getName());
+  FrobbyStringStream errorMsg;
+
+  errorMsg << "Option -" << getName() << " takes ";
   if (from == to) {
     if (from == 1)
-      fputs("one parameter, ", stderr);
+	  errorMsg << "one parameter, ";
     else
-      fprintf(stderr, "%u parameters, ", from);
+      errorMsg << from << " parameters, ";
   } else
-    fprintf(stderr, "from %u to %u parameters, ", from, to);
+	errorMsg << "from " << from << " to " << to << " parameters, ";
 
   if (paramCount == 0)
-    fputs("but no parameters were provided.\n", stderr);
+	errorMsg << "but no parameters were provided.\n";
   else {
     if (paramCount == 1)
-      fputs("but one parameter was provided.\n", stderr);
+      errorMsg << "but one parameter was provided.";
     else
-      fprintf(stderr, "but %u parameters were provided.\n", paramCount);
+	  errorMsg << "but " << paramCount << " parameters were provided.";
+	errorMsg << '\n';
 
-    fputs("The provided parameters were: ", stderr);
-    const char* prefix = "\"";
+	errorMsg << "The provided parameters were: ";
+    const char* prefix = "";
     for (unsigned int i = 0; i < paramCount; ++i) {
-      fprintf(stderr, "%s%s\"", prefix, params[i]);
-      prefix = ", \"";
+	  errorMsg << prefix << params[i];
+      prefix = ", ";
     }
-    fputc('\n', stderr);
-
+	errorMsg << ".\n";
+	
     if (paramCount > to)
-      fputs("(Did you forget to put a - in front of one of the options?)\n",
-	    stderr);
+	  errorMsg <<
+		"(Did you forget to put a - in front of one of the options?)\n";
   }
-    
-  fprintf(stderr, "\nThe option -%s has the following description:\n%s\n",
-	  getName(), _description);
-  exit(1);
+  
+  errorMsg << "The option -"
+		   << getName()
+		   << " has the following description:\n "
+		   << getDescription();
+
+  reportError(errorMsg);
 }

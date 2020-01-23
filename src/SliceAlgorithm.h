@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,45 +11,22 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef SLICE_ALGORITHM_GUARD
 #define SLICE_ALGORITHM_GUARD
 
 class Ideal;
+class MsmSlice;
+class MsmStrategy;
+class Term;
+class CoefTermConsumer;
+class Ideal;
+class HilbertSlice;
 class Slice;
 class SliceStrategy;
-class Term;
 
-// Computes the Maximal Standard Monomials (MSMs) of the input ideal.
-class SliceAlgorithm {
- public:
-  SliceAlgorithm();
-
-  // setStrategy takes over ownership of the strategy.
-  void setStrategy(SliceStrategy* strategy);
-  void setUseIndependence(bool useIndependence);
-
-  // Runs the algorithm and clears ideal. Then deletes the strategy
-  // and consumer.
-  void runAndClear(Ideal& ideal);
-
- private:
-  void content(Slice& slice, bool simplifiedAndDependent = false);
-
-  void labelSplit(Slice& slice);
-  void pivotSplit(Slice& slice);
-  bool independenceSplit(Slice& slice);
-
-  bool _useIndependence;
-  SliceStrategy* _strategy;
-};
-
-// For getting a single Maximal Standard Monomial. This may fail if
-// slice.getIdeal() is not artinian, in which case the return value is
-// false.
-bool computeSingleMSM(const Slice& slice, Term& msm);
+void runSliceAlgorithm(const Ideal& ideal, SliceStrategy& strategy);
 
 #endif

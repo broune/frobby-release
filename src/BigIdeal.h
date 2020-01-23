@@ -1,4 +1,4 @@
-/* Frobby, software for computations related to monomial ideals.
+/* Frobby: Software for monomial ideal computations.
    Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -11,10 +11,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/ 
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
 #ifndef BIG_IDEAL_GUARD
 #define BIG_IDEAL_GUARD
 
@@ -31,8 +30,9 @@ public:
 
   void insert(const Ideal& ideal);
   void insert(const Ideal& ideal, const TermTranslator& translator);
+  void insert(const vector<mpz_class>& term);
 
-  void setNames(const VarNames& names);
+  void renameVars(const VarNames& names);
 
   void newLastTerm();
   void reserve(size_t capacity);
@@ -52,7 +52,12 @@ public:
   vector<mpz_class>& operator[](size_t index);
   const vector<mpz_class>& operator[](size_t index) const;
 
+  // This also depends on the order of the variables.
+  bool operator<(const BigIdeal& ideal) const;
+
   bool empty() const;
+  bool containsIdentity() const;
+  bool contains(const vector<mpz_class>& term) const;
 
   void clear();
 
@@ -60,6 +65,15 @@ public:
   size_t getVarCount() const;
 
   void clearAndSetNames(const VarNames& names);
+
+  // Adds a variable to the VarNames associated to the ideal. It is an
+  // error to call this method when the ideal has any generators. If
+  // var is already a known variable, nothing is changed, and the
+  // return value is false. Otherwise, the return value is true.
+  bool addVarToClearedIdeal(const char* var);
+
+  // Remove variable from each generator and from the ring.
+  void eraseVar(size_t var);
 
   const VarNames& getNames() const;
 
@@ -80,9 +94,9 @@ public:
 
   void print(FILE* file) const;
 
-private:
   static bool bigTermCompare(const vector<mpz_class>& a,
-			     const vector<mpz_class>& b);
+							 const vector<mpz_class>& b);
+private:
 
   vector<string> _variables;
   vector<vector<mpz_class> > _terms;

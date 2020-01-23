@@ -84,7 +84,7 @@ void extractExponents(const vector<BigIdeal*>& ideals,
   exponentRefs.reserve(termCount + 1); // + 1 because we added the 0 above.
 
   // Collect the exponents
-  const int MaxSmall = 1000;
+  const int MaxSmall = 900;
   bool seen[MaxSmall + 1]; // avoid adding small numbers more than once
   fill_n(seen, MaxSmall + 1, false);
   seen[0] = true;
@@ -99,10 +99,10 @@ void extractExponents(const vector<BigIdeal*>& ideals,
 	  const mpz_class& e = ideal.getExponent(term, var);
 	  if (e <= MaxSmall) {
 		ASSERT(e.fits_uint_p());
-		unsigned int i = e.get_ui();
-		if (seen[i])
+		unsigned int ui = e.get_ui();
+		if (seen[ui])
 		  continue;
-		seen[i] = true;
+		seen[ui] = true;
 	  }
 	  exponentRefs.push_back(&(ideal.getExponent(term, var)));
 	}
@@ -269,32 +269,42 @@ TermTranslator::~TermTranslator() {
 }
 
 const mpz_class& TermTranslator::
-getExponent(int variable, Exponent exponent) const {
-  ASSERT(0 <= variable);
-  ASSERT(variable < (int)_exponents.size());
+getExponent(size_t variable, Exponent exponent) const {
+  ASSERT(variable < _exponents.size());
   ASSERT(exponent < _exponents[variable].size());
-  
+
   return _exponents[variable][exponent];
 }
 
 const char* TermTranslator::
-getExponentString(int variable, Exponent exponent) const {
-  ASSERT(0 <= variable);
-  ASSERT(variable < (int)_exponents.size());
+getVarExponentString(size_t variable, Exponent exponent) const {
+  ASSERT(variable < _exponents.size());
   ASSERT(exponent < _exponents[variable].size());
-  ASSERT(!_stringExponents.empty());
 
+  if (_stringExponents.empty())
+	makeStrings(true);
+  return (_stringExponents[variable][exponent]);
+}
+
+// TODO: have two separate exponent containers including and not
+// including the var, respectively.
+const char* TermTranslator::
+getExponentString(size_t variable, Exponent exponent) const {
+  ASSERT(variable < _exponents.size());
+  ASSERT(exponent < _exponents[variable].size());
+
+  if (_stringExponents.empty())
+	makeStrings(false);
   return (_stringExponents[variable][exponent]);
 }
 
 const mpz_class& TermTranslator::
-getExponent(int variable, const Term& term) const {
+getExponent(size_t variable, const Term& term) const {
   return getExponent(variable, term[variable]);
 }
 
-Exponent TermTranslator::getMaxId(int variable) const {
-  ASSERT(0 <= variable);
-  ASSERT(variable < (int)_exponents.size());
+Exponent TermTranslator::getMaxId(size_t variable) const {
+  ASSERT(variable < _exponents.size());
   
   return _exponents[variable].size() - 1;
 }

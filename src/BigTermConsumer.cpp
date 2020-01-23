@@ -16,7 +16,7 @@
    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */ 
 #include "stdinc.h"
+#include "BigTermConsumer.h"
 
-namespace constants {
-  const char* version = "0.7.4";
+BigTermConsumer::~BigTermConsumer() {
 }

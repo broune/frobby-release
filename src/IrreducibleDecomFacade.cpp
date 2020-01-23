@@ -33,9 +33,11 @@
 #include "TermConsumer.h"
 #include "IdealFacade.h"
 
+#include "TranslatingTermConsumer.h"
+
 IrreducibleDecomFacade::
 IrreducibleDecomFacade(bool printActions,
-		       const IrreducibleDecomParameters& parameters):
+					   const IrreducibleDecomParameters& parameters):
   Facade(printActions),
   _parameters(parameters) {
 }
@@ -144,6 +146,26 @@ computeIrreducibleDecom(Ideal& ideal,
 }
 
 void IrreducibleDecomFacade::
+computeIrreducibleDecom(BigIdeal& bigIdeal,
+						BigTermConsumer* consumerParameter) {
+  beginAction("Preparing to compute irreducible decomposition.");
+
+  Ideal ideal(bigIdeal.getVarCount());
+  TermTranslator translator(bigIdeal, ideal);
+  bigIdeal.clear();
+
+  if (ideal.getGeneratorCount() > 0)
+    translator.addArtinianPowers(ideal);
+
+  TermConsumer* consumer =
+	new TranslatingTermConsumer(consumerParameter, &translator);
+
+  endAction();
+
+  computeIrreducibleDecom(ideal, consumer, false);  
+}
+/* TODO: remove
+void IrreducibleDecomFacade::
 computeIrreducibleDecom(BigIdeal& bigIdeal, FILE* out, const string& format) {
   beginAction("Preparing to compute irreducible decomposition.");
 
@@ -161,27 +183,14 @@ computeIrreducibleDecom(BigIdeal& bigIdeal, FILE* out, const string& format) {
 
   computeIrreducibleDecom(ideal, consumer, false);
 }
+*/
 
 void IrreducibleDecomFacade::
 computeAlexanderDual(BigIdeal& bigIdeal,
-					 const vector<mpz_class>& point,
-					 FILE* out, const string& format) {
-  ASSERT(point.size() == bigIdeal.getVarCount());
-  computeAlexanderDual(bigIdeal, point, false, out, format);
-}
-
-void IrreducibleDecomFacade::
-computeAlexanderDual(BigIdeal& bigIdeal, FILE* out, const string& format) {
-  vector<mpz_class> dummy;
-  computeAlexanderDual(bigIdeal, dummy, true, out, format);
-}
-
-void IrreducibleDecomFacade::
-computeAlexanderDual(BigIdeal& bigIdeal,
-					 const vector<mpz_class>& pointParameter,
-					 bool useLcm,
-					 FILE* out,
-					 const string& format) {
+					 const vector<mpz_class>* pointParameter,
+					 BigTermConsumer* consumerParameter) {
+  ASSERT(pointParameter == 0 ||
+		 pointParameter->size() == bigIdeal.getVarCount());
   // We have to remove the non-minimal generators before we take the
   // lcm, since the Alexander dual works on the lcm of only the
   // minimal generators.
@@ -197,11 +206,10 @@ computeAlexanderDual(BigIdeal& bigIdeal,
 
   vector<mpz_class> point;
 
-  if (useLcm)
+  if (pointParameter == 0)
 	point = lcm;
   else {
-	ASSERT(pointParameter.size() == bigIdeal.getVarCount());
-	point = pointParameter;
+	point = *pointParameter;
 	for (size_t var = 0; var < bigIdeal.getVarCount(); ++var) {
 	  if (point[var] < lcm[var]) {
 		fputs("ERROR: The specified point to dualize on is not divisible by the\n"
@@ -220,7 +228,7 @@ computeAlexanderDual(BigIdeal& bigIdeal,
     translator.addArtinianPowers(ideal);
 
   TermConsumer* consumer =
-	IOHandler::getIOHandler(format)->createWriter(out, &translator);
+	new TranslatingTermConsumer(consumerParameter, &translator);
 
   endAction();
 

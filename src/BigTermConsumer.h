@@ -15,8 +15,18 @@
    with this program; if not, write to the Free Software Foundation, Inc.,
    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */ 
-#include "stdinc.h"
+#ifndef BIG_TERM_CONSUMER_GUARD
+#define BIG_TERM_CONSUMER_GUARD
 
-namespace constants {
-  const char* version = "0.7.4";
-}
+class Term;
+class TermTranslator;
+
+class BigTermConsumer {
+ public:
+  virtual ~BigTermConsumer();
+
+  virtual void consume(const Term& term, TermTranslator* translator) = 0;
+  virtual void consume(mpz_ptr* term) = 0;
+};
+
+#endif

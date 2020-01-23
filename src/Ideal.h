@@ -25,7 +25,7 @@ class Ideal {
   typedef Cont::iterator iterator;
 
 public:
-  Ideal(unsigned int varCount = 0);
+  Ideal(size_t varCount = 0);
   Ideal(const Ideal& ideal);
   ~Ideal();
 

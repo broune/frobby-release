@@ -47,8 +47,8 @@ namespace fourti2 {
     size_t termCount;
     size_t varCount;
 
-    scanner.readInteger(termCount);
-    scanner.readInteger(varCount);
+    scanner.readSizeT(termCount);
+    scanner.readSizeT(varCount);
 
     VarNames names(varCount - 1);
     basis.clearAndSetNames(names);
@@ -58,11 +58,11 @@ namespace fourti2 {
   }
 
   void readLatticeBasis(Scanner& scanner, BigIdeal& basis) {
-    unsigned int rowCount;
-    unsigned int columnCount;
+    size_t rowCount;
+    size_t columnCount;
 
-    scanner.readInteger(rowCount);
-    scanner.readInteger(columnCount);
+    scanner.readSizeT(rowCount);
+    scanner.readSizeT(columnCount);
 
     VarNames names(columnCount);
     basis.clearAndSetNames(names);
@@ -70,7 +70,7 @@ namespace fourti2 {
     for (unsigned int i = 0; i < rowCount; ++i) {
       basis.newLastTerm();
       for (unsigned int j = 0; j < columnCount; ++j)
-	scanner.readInteger(basis.getLastTermExponentRef(j));
+		scanner.readInteger(basis.getLastTermExponentRef(j));
     }
   }
 

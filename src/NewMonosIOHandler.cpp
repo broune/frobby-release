@@ -18,118 +18,126 @@
 #include "NewMonosIOHandler.h"
 
 #include "Scanner.h"
-#include "BigIdeal.h"
 #include "VarNames.h"
-#include "error.h"
 #include "BigTermConsumer.h"
 #include "DataType.h"
+#include "IdealWriter.h"
+#include "error.h"
+#include "InputConsumer.h"
 
 #include <cstdio>
 
-NewMonosIOHandler::NewMonosIOHandler():
-  IOHandler(staticGetName(),
-			"Newer format used by the program Monos.",
-			false) {
-  registerInput(DataType::getMonomialIdealType());
-  registerInput(DataType::getMonomialIdealListType());
-  registerOutput(DataType::getMonomialIdealType());
-}
-
-const char* NewMonosIOHandler::staticGetName() {
-  return "newmonos";
-}
-
-void NewMonosIOHandler::writeTerm(const vector<mpz_class>& term,
-								  const VarNames& names,
-								  FILE* out) {
-  writeTermProduct(term, names, out);
-}
-
-void NewMonosIOHandler::writeRing(const VarNames& names, FILE* out) {
-  fputs("(lex-order", out);
-  for (unsigned int i = 0; i < names.getVarCount(); ++i) {
-	putc(' ', out);
-	fputs(names.getName(i).c_str(), out);
+namespace IO {
+  namespace NewMonos {
+    void writeRing(const VarNames& names, FILE* out);
+    void readRingNoLeftParen(Scanner& in, VarNames& names);
+    void readIdealNoLeftParen(Scanner& in, InputConsumer& consumer);
   }
-  fputc(')', out);
-}
+  namespace N = NewMonos;
 
-void NewMonosIOHandler::writeIdealHeader(const VarNames& names,
-										 bool defineNewRing,
-										 FILE* out) {
-  fputs("(monomial-ideal-with-order\n ", out);
-  writeRing(names, out);
-}
+  class NewMonosIdealWriter : public IdealWriter {
+  public:
+    NewMonosIdealWriter(FILE* out): IdealWriter(out) {
+    }
 
-void NewMonosIOHandler::writeTermOfIdeal(const Term& term,
-										 const TermTranslator* translator,
-										 bool isFirst,
-										 FILE* out) {
-  fputs("\n ", out);
-  IOHandler::writeTermProduct(term, translator, out);
-}
+  private:
+    virtual void doWriteHeader(bool first) {
+      fputs("(monomial-ideal-with-order\n ", getFile());
+      N::writeRing(getNames(), getFile());
+    }
 
-void NewMonosIOHandler::writeTermOfIdeal(const vector<mpz_class>& term,
-										 const VarNames& names,
-										 bool isFirst,
-										 FILE* out) {
-  fputs("\n ", out);
-  IOHandler::writeTermProduct(term, names, out);
-}
+    virtual void doWriteTerm(const Term& term,
+                             const TermTranslator& translator,
+                             bool first) {
+      fputs("\n ", getFile());
+      writeTermProduct(term, translator, getFile());
+    }
 
-void NewMonosIOHandler::writeIdealFooter(const VarNames& names,
-										 bool wroteAnyGenerators,
-										 FILE* out) {
-  fputs("\n)\n", out);
-}
+    virtual void doWriteTerm(const vector<mpz_class>& term,
+                             bool first) {
+      fputs("\n ", getFile());
+      writeTermProduct(term, getNames(), getFile());
+    }
 
-void NewMonosIOHandler::readRingNoLeftParen(Scanner& in, VarNames& names) {
-  in.expect("lex-order");
-  while (!in.match(')'))
-	names.addVarSyntaxCheckUnique(in, in.readIdentifier());
-}
+    virtual void doWriteFooter(bool wasZeroIdeal) {
+      fputs("\n)\n", getFile());
+    }
 
-void NewMonosIOHandler::readIdealNoLeftParen(Scanner& in,
-											 BigTermConsumer& consumer) {
-  in.expect("monomial-ideal-with-order");
+    virtual void doWriteEmptyList() {
+      N::writeRing(getNames(), getFile());
+    }
+  };
 
-  VarNames names;
-  in.expect('(');
-  readRingNoLeftParen(in, names);
-  consumer.consumeRing(names);
-
-  consumer.beginConsuming();
-  vector<mpz_class> term(names.getVarCount());
-
-  while (!in.match(')')) {
-	readTerm(in, names, term);
-	consumer.consume(term);
+  NewMonosIOHandler::NewMonosIOHandler():
+    IOHandlerImpl(staticGetName(), "Newer format used by the program Monos.") {
+    registerInput(DataType::getMonomialIdealType());
+    registerInput(DataType::getMonomialIdealListType());
+    registerOutput(DataType::getMonomialIdealType());
   }
 
-  consumer.doneConsuming();
-}
-
-void NewMonosIOHandler::readIdeal(Scanner& in, BigTermConsumer& consumer) {
-  in.expect('(');
-  readIdealNoLeftParen(in, consumer);
-}
-
-void NewMonosIOHandler::readIdeals(Scanner& in, BigTermConsumer& consumer) {
-  in.expect('(');
-  if (in.peek('l') || in.peek('L')) {
-	VarNames names;
-	readRingNoLeftParen(in, names);
-	consumer.consumeRing(names);
-	return;
+  const char* NewMonosIOHandler::staticGetName() {
+    return "newmonos";
   }
 
-  do {
-	readIdealNoLeftParen(in, consumer);
-  } while (in.match('('));
-}
+  BigTermConsumer* NewMonosIOHandler::doCreateIdealWriter(FILE* out) {
+    return new NewMonosIdealWriter(out);
+  }
 
-void NewMonosIOHandler::readPolynomial
-(Scanner& in, CoefBigTermConsumer& consumer) {
-  ASSERT(false);
-  reportInternalError("Called NewMonosIOHandler::readPolynomial.");
+  void NewMonosIOHandler::doWriteTerm(const vector<mpz_class>& term,
+                                      const VarNames& names,
+                                      FILE* out) {
+    writeTermProduct(term, names, out);
+  }
+
+  void NewMonosIOHandler::doReadTerm(Scanner& in, InputConsumer& consumer) {
+	consumer.consumeTermProductNotation(in);
+  }
+
+  void NewMonosIOHandler::doReadIdeal(Scanner& in, InputConsumer& consumer) {
+    in.expect('(');
+    N::readIdealNoLeftParen(in, consumer);
+  }
+
+  void NewMonosIOHandler::doReadIdeals(Scanner& in, InputConsumer& consumer) {
+    in.expect('(');
+    if (in.peek('l') || in.peek('L')) {
+      VarNames names;
+      N::readRingNoLeftParen(in, names);
+      consumer.consumeRing(names);
+      return;
+    }
+
+    do {
+      N::readIdealNoLeftParen(in, consumer);
+    } while (in.match('('));
+  }
+
+  void N::writeRing(const VarNames& names, FILE* out) {
+    fputs("(lex-order", out);
+    for (unsigned int i = 0; i < names.getVarCount(); ++i) {
+      putc(' ', out);
+      fputs(names.getName(i).c_str(), out);
+    }
+    fputc(')', out);
+  }
+
+  void N::readRingNoLeftParen(Scanner& in, VarNames& names) {
+    in.expect("lex-order");
+    while (!in.match(')'))
+      names.addVarSyntaxCheckUnique(in, in.readIdentifier());
+  }
+
+  void N::readIdealNoLeftParen(Scanner& in, InputConsumer& consumer) {
+    in.expect("monomial-ideal-with-order");
+
+    VarNames names;
+    in.expect('(');
+    N::readRingNoLeftParen(in, names);
+    consumer.consumeRing(names);
+
+    consumer.beginIdeal();
+    while (!in.match(')'))
+	  consumer.consumeTermProductNotation(in);
+    consumer.endIdeal();
+  }
 }

@@ -26,19 +26,19 @@
 
 TEST_SUITE2(LibraryInterface, IrreducibleDecom)
 
-TEST(IrreducibleDecom, Typical) {
+TEST(IrreducibleDecom, TypicalEncoded) {
   Frobby::Ideal ideal = toLibIdeal(IdealFactory::xx_yy_xz_yz());
   LibIdealConsumer consumer(IdealFactory::ring_xyzt());
 
   bool returnValue =
-	Frobby::irreducibleDecompositionAsMonomials(ideal, consumer);
+    Frobby::irreducibleDecompositionAsMonomials(ideal, consumer);
 
   ASSERT_TRUE(returnValue);
   ASSERT_EQ(consumer.getIdeal(), IdealFactory::xy_xxyyz());
   ASSERT_TRUE(consumer.hasAnyOutput());
 }
 
-TEST(IrreducibleDecom, TypicalEncoded) {
+TEST(IrreducibleDecom, Typical) {
   Frobby::Ideal ideal = toLibIdeal(IdealFactory::xx_yy_xz_yz());
   LibIdealsConsumer consumer(IdealFactory::ring_xyzt());
 
@@ -47,53 +47,53 @@ TEST(IrreducibleDecom, TypicalEncoded) {
   ASSERT_EQ(consumer.getIdeals(), IdealFactory::irrdecom_xx_yy_xz_yz());
 }
 
-TEST(IrreducibleDecom, ZeroIdeal) {
-  for (size_t varCount = 0; varCount <= 3; ++varCount) {
-	Frobby::Ideal frobbyInputIdeal(varCount);
-	LibIdealConsumer consumer((VarNames(varCount)));
-
-	bool returnValue =
-	  Frobby::irreducibleDecompositionAsMonomials(frobbyInputIdeal, consumer);
-
-	ASSERT_FALSE(returnValue);
-	ASSERT_FALSE(consumer.hasAnyOutput());
-  }
-}
-
 TEST(IrreducibleDecom, ZeroIdealEncoded) {
   for (size_t varCount = 0; varCount <= 3; ++varCount) {
-	Frobby::Ideal frobbyInputIdeal(varCount);
-	LibIdealsConsumer consumer((VarNames(varCount)));
+    Frobby::Ideal frobbyInputIdeal(varCount);
+    LibIdealConsumer consumer((VarNames(varCount)));
 
-	Frobby::irreducibleDecompositionAsIdeals(frobbyInputIdeal, consumer);
+    bool returnValue =
+      Frobby::irreducibleDecompositionAsMonomials(frobbyInputIdeal, consumer);
 
-	vector<BigIdeal> ideals;
-	ideals.push_back(IdealFactory::zeroIdeal(varCount));
-	ASSERT_EQ(consumer.getIdeals(), ideals);
+    ASSERT_FALSE(returnValue);
+    ASSERT_FALSE(consumer.hasAnyOutput());
   }
 }
 
-TEST(IrreducibleDecom, WholeRing) {
+TEST(IrreducibleDecom, ZeroIdeal) {
   for (size_t varCount = 0; varCount <= 3; ++varCount) {
-	Frobby::Ideal ideal = toLibIdeal(IdealFactory::wholeRing(varCount));
-	LibIdealConsumer consumer((VarNames(varCount)));
+    Frobby::Ideal frobbyInputIdeal(varCount);
+    LibIdealsConsumer consumer((VarNames(varCount)));
 
-	bool returnValue =
-	  Frobby::irreducibleDecompositionAsMonomials(ideal, consumer);
+    Frobby::irreducibleDecompositionAsIdeals(frobbyInputIdeal, consumer);
 
-	ASSERT_TRUE(returnValue);
-	ASSERT_TRUE(consumer.hasAnyOutput());
-	ASSERT_EQ(consumer.getIdeal(), IdealFactory::zeroIdeal(varCount));
+    vector<BigIdeal> ideals;
+    ideals.push_back(IdealFactory::zeroIdeal(varCount));
+    ASSERT_EQ(consumer.getIdeals(), ideals);
   }
 }
 
 TEST(IrreducibleDecom, WholeRingEncoded) {
   for (size_t varCount = 0; varCount <= 3; ++varCount) {
-	Frobby::Ideal ideal = toLibIdeal(IdealFactory::wholeRing(varCount));
-	LibIdealsConsumer consumer((VarNames(varCount)));
+    Frobby::Ideal ideal = toLibIdeal(IdealFactory::wholeRing(varCount));
+    LibIdealConsumer consumer((VarNames(varCount)));
 
-	Frobby::irreducibleDecompositionAsIdeals(ideal, consumer);
+    bool returnValue =
+      Frobby::irreducibleDecompositionAsMonomials(ideal, consumer);
 
-	ASSERT_EQ(consumer.getIdeals(), vector<BigIdeal>());
+    ASSERT_TRUE(returnValue);
+    ASSERT_TRUE(consumer.hasAnyOutput());
+    ASSERT_EQ(consumer.getIdeal(), IdealFactory::zeroIdeal(varCount));
+  }
+}
+
+TEST(IrreducibleDecom, WholeRing) {
+  for (size_t varCount = 0; varCount <= 3; ++varCount) {
+    Frobby::Ideal ideal = toLibIdeal(IdealFactory::wholeRing(varCount));
+    LibIdealsConsumer consumer((VarNames(varCount)));
+
+    Frobby::irreducibleDecompositionAsIdeals(ideal, consumer);
+
+    ASSERT_EQ(consumer.getIdeals(), vector<BigIdeal>());
   }
 }

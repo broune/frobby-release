@@ -21,13 +21,14 @@
 #include "Ideal.h"
 #include "TermTranslator.h"
 #include "IOHandler.h"
-#include "SliceAlgorithm.h"
 #include "IOFacade.h"
 #include "Macaulay2IOHandler.h"
 #include "CanonicalCoefTermConsumer.h"
 #include "error.h"
 #include "FrobbyStringStream.h"
 #include "SizeMaxIndepSetAlg.h"
+#include "HilbertBasecase.h"
+#include "PivotEulerAlg.h"
 
 IdealFacade::IdealFacade(bool printActions):
   Facade(printActions) {
@@ -61,65 +62,92 @@ void IdealFacade::takeRadical(BigIdeal& bigIdeal) {
   endAction();
 }
 
-mpz_class IdealFacade::computeDimension
-(const BigIdeal& bigIdeal, bool squareFreeAndMinimal) {
+void IdealFacade::swap01(BigIdeal& bigIdeal) {
+  beginAction("Swapping 0 and 1 exponents.");
+
+  const size_t genCount = bigIdeal.getGeneratorCount();
+  const size_t varCount = bigIdeal.getVarCount();
+  for (size_t gen = 0; gen < genCount; ++gen) {
+	for (size_t var = 0; var < varCount; ++var) {
+	  if (bigIdeal[gen][var] == 1)
+		bigIdeal[gen][var] = 0;
+	  else if (bigIdeal[gen][var] == 0)
+		bigIdeal[gen][var] = 1;
+	}
+  }
+
+  endAction();
+}
+
+mpz_class IdealFacade::computeDimension(const BigIdeal& bigIdeal,
+                                        bool codimension,
+                                        bool squareFreeAndMinimal) {
+  beginAction("Computing dimension of ideal.");
+
   size_t varCount = bigIdeal.getVarCount();
   size_t genCount = bigIdeal.getGeneratorCount();
 
   Ideal radical(varCount);
   Term tmp(varCount);
   for (size_t term = 0; term < genCount; ++term) {
-	for (size_t var = 0; var < varCount; ++var) {
-	  ASSERT(!squareFreeAndMinimal || bigIdeal[term][var] <= 1);
+    for (size_t var = 0; var < varCount; ++var) {
+      ASSERT(!squareFreeAndMinimal || bigIdeal[term][var] <= 1);
 
-	  if (bigIdeal[term][var] == 0)
-		tmp[var] = 0;
-	  else
-		tmp[var] = 1;
-	}
-	radical.insert(tmp);
+      if (bigIdeal[term][var] == 0)
+        tmp[var] = 0;
+      else
+        tmp[var] = 1;
+    }
+    radical.insert(tmp);
   }
   ASSERT(!squareFreeAndMinimal || radical.isMinimallyGenerated());
 
   if (!squareFreeAndMinimal)
-	radical.minimize();
+    radical.minimize();
 
   SizeMaxIndepSetAlg alg;
   alg.run(radical);
-  return alg.getMaxIndepSetSize();
+  mpz_class result = alg.getMaxIndepSetSize();
+
+  endAction();
+
+  if (codimension)
+    return varCount - result;
+  else
+    return result;
 }
 
 void IdealFacade::takeProducts(const vector<BigIdeal*>& ideals,
-							   BigIdeal& ideal) {
+                               BigIdeal& ideal) {
   beginAction("Taking products.");
 
   size_t idealCount = ideals.size();
   for (size_t i = 0; i < idealCount; ++i) {
-	ASSERT(ideals[i] != 0);
+    ASSERT(ideals[i] != 0);
 
-	if (!(ideal.getNames() == ideals[i]->getNames())) {
-	  FrobbyStringStream errorMsg;
-	  errorMsg <<
-		"Taking products of ideals in rings with different variable lists.\n";
-	  
-	  string list;
-	  ideal.getNames().toString(list);
-	  errorMsg << "One ring has variables\n  " << list << ",\n";
-	  
-	  ideals[i]->getNames().toString(list);
-	  errorMsg << "while another has variables\n  " << list <<
-		".\nContact the Frobby developers if you need this functionality.";
+    if (!(ideal.getNames() == ideals[i]->getNames())) {
+      FrobbyStringStream errorMsg;
+      errorMsg <<
+        "Taking products of ideals in rings with different variable lists.\n";
 
-	  reportError(errorMsg);
-	}
+      string list;
+      ideal.getNames().toString(list);
+      errorMsg << "One ring has variables\n  " << list << ",\n";
 
-	size_t genCount = ideals[i]->getGeneratorCount();
-	size_t varCount = ideals[i]->getVarCount();
+      ideals[i]->getNames().toString(list);
+      errorMsg << "while another has variables\n  " << list <<
+        ".\nContact the Frobby developers if you need this functionality.";
 
-	ideal.newLastTerm();
-	for (size_t t = 0; t < genCount; ++t)
-	  for (size_t var = 0; var < varCount; ++var)
-		ideal.getLastTermExponentRef(var) += (*ideals[i])[t][var];
+      reportError(errorMsg);
+    }
+
+    size_t genCount = ideals[i]->getGeneratorCount();
+    size_t varCount = ideals[i]->getVarCount();
+
+    ideal.newLastTerm();
+    for (size_t t = 0; t < genCount; ++t)
+      for (size_t var = 0; var < varCount; ++var)
+        ideal.getLastTermExponentRef(var) += (*ideals[i])[t][var];
   }
 
   endAction();
@@ -140,20 +168,62 @@ void IdealFacade::sortAllAndMinimize(BigIdeal& bigIdeal) {
   endAction();
 }
 
+void IdealFacade::projectVar(BigIdeal& bigIdeal, size_t var) {
+  beginAction("Projecting a variable away.");
+
+  ASSERT(var < bigIdeal.getVarCount());
+
+  bigIdeal.projectVar(var);
+
+  endAction();
+}
+#include <iostream>
+void IdealFacade::trimVariables(const vector<BigIdeal*>& ideals,
+								VarNames& names) {
+  beginAction("Removing unused variables.");
+
+  vector<char> used(names.getVarCount());
+  for (size_t i = 0; i < ideals.size(); ++i) {
+	BigIdeal& ideal = *(ideals[i]);
+	ASSERT(ideal.getNames() == names);
+	for (size_t gen = 0; gen < ideal.getGeneratorCount(); ++gen)
+	  for (size_t var = 0; var < ideal.getVarCount(); ++var)
+		if (ideal[gen][var] != 0)
+		  used[var] = true;
+  }
+
+  // Go from high to low to avoid removing variable i interfering with
+  // the offset of variable j, as it would when i < j.
+  for (size_t var = names.getVarCount(); var > 0;) {
+	--var;
+	if (!used[var]) {
+	  names.projectVar(var);
+	  for (size_t i = 0; i < ideals.size(); ++i)
+		ideals[i]->projectVar(var);
+	}
+  }
+
+  endAction();
+}
+
 void IdealFacade::addPurePowers(BigIdeal& bigIdeal) {
+  beginAction("Adding pure powers.");
+
   vector<mpz_class> lcm;
   bigIdeal.getLcm(lcm);
 
   vector<mpz_class> purePower(bigIdeal.getVarCount());
   for (size_t var = 0; var < bigIdeal.getVarCount(); ++var) {
-	purePower[var] = lcm[var] + 1;
-	if (!bigIdeal.contains(purePower))
-	  bigIdeal.insert(purePower);
+    purePower[var] = lcm[var] + 1;
+    if (!bigIdeal.contains(purePower))
+      bigIdeal.insert(purePower);
 
-	ASSERT(bigIdeal.contains(purePower));
+    ASSERT(bigIdeal.contains(purePower));
 
-	purePower[var] = 0;
+    purePower[var] = 0;
   }
+
+  endAction();
 }
 
 void IdealFacade::sortGeneratorsUnique(BigIdeal& ideal) {
@@ -180,22 +250,33 @@ void IdealFacade::sortVariables(BigIdeal& ideal) {
   endAction();
 }
 
-// TODO: decide what to do with this.
 void IdealFacade::printAnalysis(FILE* out, BigIdeal& bigIdeal) {
   beginAction("Computing and printing analysis.");
 
   Ideal ideal(bigIdeal.getVarCount());
   TermTranslator translator(bigIdeal, ideal, false);
 
-  fprintf(out, "is strongly generic: %s",
-		  ideal.isStronglyGeneric() ? "yes" : "no");
+  fprintf(stdout, "generators: %lu\n",
+          (unsigned long)ideal.getGeneratorCount());
+  fprintf(stdout, "variables:  %lu\n",
+          (unsigned long)ideal.getVarCount());
+
+  size_t sizeBeforeMinimize = ideal.getGeneratorCount();
+  ideal.minimize();
+  fprintf(stdout, "minimally generated: %s\n",
+          ideal.getGeneratorCount() == sizeBeforeMinimize ? "yes" : "no");
+
+  fprintf(out, "strongly generic: %s\n",
+          ideal.isStronglyGeneric() ? "yes" : "no");
+  fprintf(out, "weakly generic: %s\n",
+          ideal.isWeaklyGeneric() ? "yes" : "no");
 
   endAction();
 }
 
 void IdealFacade::printLcm(BigIdeal& ideal,
-						   IOHandler* handler,
-						   FILE* out) {
+                           IOHandler* handler,
+                           FILE* out) {
   beginAction("Computing lcm");
 
   vector<mpz_class> lcm;

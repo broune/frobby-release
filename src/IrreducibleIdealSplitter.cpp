@@ -21,18 +21,23 @@
 #include "TermTranslator.h"
 
 IrreducibleIdealSplitter::IrreducibleIdealSplitter
-(auto_ptr<BigTermConsumer> consumer):
+(BigTermConsumer& consumer):
   _consumer(consumer),
-  _tmp(),
-  _bigTmp(),
+  _inList(false) {
+}
+
+IrreducibleIdealSplitter::IrreducibleIdealSplitter
+(auto_ptr<BigTermConsumer> consumer):
+  _consumer(*consumer),
+  _consumerDeleter(consumer),
   _inList(false) {
 }
 
 void IrreducibleIdealSplitter::consumeRing(const VarNames& names) {
   _tmp.reset(names.getVarCount());
   _bigTmp.resize(names.getVarCount());
-  _consumer->consumeRing(names);
-  
+  _consumer.consumeRing(names);
+
   ASSERT(_tmp.isIdentity());
   ASSERT(_bigTmp == vector<mpz_class>(_bigTmp.size()));
 }
@@ -40,28 +45,28 @@ void IrreducibleIdealSplitter::consumeRing(const VarNames& names) {
 void IrreducibleIdealSplitter::beginConsumingList() {
   ASSERT(!_inList);
   _inList = true;
-  _consumer->beginConsumingList();
+  _consumer.beginConsumingList();
 }
 
 void IrreducibleIdealSplitter::beginConsuming() {
   if (!_inList)
-	_consumer->beginConsumingList();
+    _consumer.beginConsumingList();
 }
 
 void IrreducibleIdealSplitter::consume(const Term& term) {
   ASSERT(term.getVarCount() == _tmp.getVarCount());
   ASSERT(_tmp.isIdentity());
-  
-  _consumer->beginConsuming();
+
+  _consumer.beginConsuming();
   for (size_t var = 0; var < term.getVarCount(); ++var) {
-	if (term[var] != 0) {
-	  _tmp[var] = term[var];
-	  _consumer->consume(_tmp);
-	  _tmp[var] = 0;
-	}
+    if (term[var] != 0) {
+      _tmp[var] = term[var];
+      _consumer.consume(_tmp);
+      _tmp[var] = 0;
+    }
   }
-  _consumer->doneConsuming();
-  
+  _consumer.doneConsuming();
+
   ASSERT(_tmp.isIdentity());
 }
 
@@ -69,43 +74,43 @@ void IrreducibleIdealSplitter::consume
 (const Term& term, const TermTranslator& translator) {
   ASSERT(term.getVarCount() == _tmp.getVarCount());
   ASSERT(_tmp.isIdentity());
-  
-  _consumer->beginConsuming();
+
+  _consumer.beginConsuming();
   for (size_t var = 0; var < term.getVarCount(); ++var) {
-	if (translator.getExponent(var, term) != 0) {
-	  _tmp[var] = term[var];
-	  _consumer->consume(_tmp, translator);
-	  _tmp[var] = 0;
-	}
+    if (translator.getExponent(var, term) != 0) {
+      _tmp[var] = term[var];
+      _consumer.consume(_tmp, translator);
+      _tmp[var] = 0;
+    }
   }
-  _consumer->doneConsuming();
-  
+  _consumer.doneConsuming();
+
   ASSERT(_tmp.isIdentity());
 }
 
 void IrreducibleIdealSplitter::consume(const vector<mpz_class>& term) {
   ASSERT(term.size() == _bigTmp.size());
   ASSERT(_bigTmp == vector<mpz_class>(_bigTmp.size()));
-  
-  _consumer->beginConsuming();
+
+  _consumer.beginConsuming();
   for (size_t var = 0; var < term.size(); ++var) {
-	if (term[var] != 0) {
-	  _bigTmp[var] = term[var];
-	  _consumer->consume(_bigTmp);
-	  _bigTmp[var] = 0;
-	}
+    if (term[var] != 0) {
+      _bigTmp[var] = term[var];
+      _consumer.consume(_bigTmp);
+      _bigTmp[var] = 0;
+    }
   }
-  _consumer->doneConsuming();
-  
+  _consumer.doneConsuming();
+
   ASSERT(_bigTmp == vector<mpz_class>(_bigTmp.size()));
 }
 
 void IrreducibleIdealSplitter::doneConsuming() {
   if (!_inList)
-	_consumer->doneConsumingList();
+    _consumer.doneConsumingList();
 }
 
 void IrreducibleIdealSplitter::doneConsumingList() {
   ASSERT(_inList);
-  _consumer->doneConsumingList();
+  _consumer.doneConsumingList();
 }

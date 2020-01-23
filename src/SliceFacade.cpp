@@ -27,7 +27,6 @@
 #include "TranslatingTermConsumer.h"
 #include "TranslatingCoefTermConsumer.h"
 #include "DebugStrategy.h"
-#include "SliceAlgorithm.h"
 #include "DecomRecorder.h"
 #include "TermGrader.h"
 #include "OptimizeStrategy.h"
@@ -40,199 +39,96 @@
 #include "CanonicalTermConsumer.h"
 #include "VarSorter.h"
 #include "StatisticsStrategy.h"
-#include "error.h"
 #include "IrreducibleIdealSplitter.h"
 #include "SizeMaxIndepSetAlg.h"
+#include "SliceParams.h"
+#include "error.h"
+#include "display.h"
 
-SliceFacade::SliceFacade(const BigIdeal& ideal,
-						 BigTermConsumer* consumer,
-						 bool printActions):
-  Facade(printActions),
-  _printDebug(false), 
-  _printStatistics(false),
-  _useIndependence(false),
-  _useSimplification(true),
-  _isMinimallyGenerated(false),
-  _canonicalOutput(false),
-  _out(0),
-  _ioHandler(0),
-  _termConsumer(consumer),
-  _coefTermConsumer(0),
-  _generatedTermConsumer(0),
-  _generatedCoefTermConsumer(0),
-  _translator(0),
-  _ideal(0) {
-  ASSERT(consumer != 0);
+#include <iterator>
 
-  initialize(ideal);
+SliceFacade::SliceFacade(const SliceParams& params, const DataType& output):
+  Facade(params.getPrintActions()),
+  _params(params) {
+  _split = SplitStrategy::createStrategy(params.getSplit().c_str());
+  _common.readIdealAndSetOutput(params, output);
 }
 
-SliceFacade::SliceFacade(const BigIdeal& ideal,
-						 CoefBigTermConsumer* consumer,
-						 bool printActions):
-  Facade(printActions),
-  _printDebug(false), 
-  _printStatistics(false),
-  _useIndependence(false),
-  _useSimplification(true),
-  _isMinimallyGenerated(false),
-  _canonicalOutput(false),
-  _out(0),
-  _ioHandler(0),
-  _termConsumer(0),
-  _coefTermConsumer(consumer),
-  _generatedTermConsumer(0),
-  _generatedCoefTermConsumer(0),
-  _translator(0),
-  _ideal(0) {
-  ASSERT(consumer != 0);
-
-  initialize(ideal);
+SliceFacade::SliceFacade(const SliceParams& params,
+                         const BigIdeal& ideal,
+                         BigTermConsumer& consumer):
+  Facade(params.getPrintActions()),
+  _params(params) {
+  _split = SplitStrategy::createStrategy(params.getSplit().c_str());
+  _common.setIdealAndIdealOutput(params, ideal, consumer);
 }
 
-SliceFacade::SliceFacade(const BigIdeal& ideal,
-						 IOHandler* handler,
-						 FILE* out,
-						 bool printActions):
-  Facade(printActions),
-  _printDebug(false), 
-  _printStatistics(false),
-  _useIndependence(false),
-  _useSimplification(true),
-  _isMinimallyGenerated(false),
-  _canonicalOutput(false),
-  _out(out),
-  _ioHandler(handler),
-  _termConsumer(0),
-  _coefTermConsumer(0),
-  _generatedTermConsumer(0),
-  _generatedCoefTermConsumer(0),
-  _translator(0),
-  _ideal(0) {
-  ASSERT(handler != 0);
-  ASSERT(out != 0);
-
-  initialize(ideal);
+SliceFacade::SliceFacade(const SliceParams& params,
+                         const BigIdeal& ideal,
+                         CoefBigTermConsumer& consumer):
+  Facade(params.getPrintActions()),
+  _params(params) {
+  _split = SplitStrategy::createStrategy(params.getSplit().c_str());
+  _common.setIdealAndPolyOutput(params, ideal, consumer);
 }
 
-void SliceFacade::setPrintDebug(bool printDebug) {
-  _printDebug = printDebug;
-}
-
-void SliceFacade::setPrintStatistics(bool printStatistics) {
-  _printStatistics = printStatistics;
-}
-
-void SliceFacade::setUseIndependence(bool useIndependence) {
-  _useIndependence = useIndependence;
-}
-
-void SliceFacade::setUseSimplification(bool useSimplification) {
-  _useSimplification = useSimplification;
-}
-
-void SliceFacade::setIsMinimallyGenerated(bool isMinimallyGenerated) {
-  _isMinimallyGenerated = isMinimallyGenerated;
-}
-
-void SliceFacade::setSplitStrategy(auto_ptr<SplitStrategy> split) {
-  _split = split;
-}
-
-void SliceFacade::setCanonicalOutput() {
-  ASSERT(_translator.get() != 0);
-
-  _canonicalOutput = true;
-
-  VarSorter sorter(_translator->getNames());
-  sorter.permute(_translator.get());
-
-  Ideal::iterator stop = _ideal->end();
-  for (Ideal::iterator it = _ideal->begin(); it != stop; ++it)
-    sorter.permute(*it);
+SliceFacade::~SliceFacade() {
 }
 
 void SliceFacade::computeMultigradedHilbertSeries() {
-  ASSERT(_ideal.get() != 0);
-
-  minimize();
-
+  ASSERT(isFirstComputation());
   beginAction("Computing multigraded Hilbert-Poincare series.");
 
-  CoefTermConsumer* consumer = getCoefTermConsumer();
+  auto_ptr<CoefTermConsumer> consumer = _common.makeTranslatedPolyConsumer();
 
-  consumer->consumeRing(_translator->getNames());
+  consumer->consumeRing(_common.getNames());
   consumer->beginConsuming();
-  {
-	HilbertStrategy strategy(consumer, _split.get());
-	runSliceAlgorithmWithOptions(strategy);
-  }
+  HilbertStrategy strategy(consumer.get(), _split.get());
+  runSliceAlgorithmWithOptions(strategy);
   consumer->doneConsuming();
 
   endAction();
 }
 
 void SliceFacade::computeUnivariateHilbertSeries() {
-  minimize();
+  ASSERT(isFirstComputation());
+  beginAction("Computing univariate Hilbert-Poincare series.");
 
-  ASSERT(_translator.get() != 0);
+  auto_ptr<CoefTermConsumer> consumer =
+    _common.makeToUnivariatePolyConsumer();
 
-  beginAction("Preparing to compute univariate Hilbert-Poincare series.");
-
-  // Note ownership is passed in one case and not in the other.
-  if (_out != 0) {
-	_generatedCoefTermConsumer.reset
-	  (new TotalDegreeCoefTermConsumer
-	   (_ioHandler->createPolynomialWriter(_out), *_translator));
-  } else {
-	_generatedCoefTermConsumer.reset
-	  (new TotalDegreeCoefTermConsumer(*_coefTermConsumer, *_translator));
-  }
+  consumer->consumeRing(_common.getNames());
+  consumer->beginConsuming();
+  HilbertStrategy strategy(consumer.get(), _split.get());
+  runSliceAlgorithmWithOptions(strategy);
+  consumer->doneConsuming();
 
   endAction();
-
-  computeMultigradedHilbertSeries();
-  _generatedCoefTermConsumer.reset();
 }
 
 void SliceFacade::computeIrreducibleDecomposition(bool encode) {
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_translator.get() != 0);
-
-  minimize();
-
-  if (!encode) {
-	doIrreducibleIdealOutput();
-	getTermConsumer()->beginConsumingList();
-  }
-
-  beginAction("Preparing to compute irreducible decomposition.");
-
-  _translator->addPurePowersAtInfinity(*_ideal);
-
-  endAction();
-
-  computeMaximalStaircaseMonomials();
-
-  if (!encode)
-	getTermConsumer()->doneConsumingList();
+  ASSERT(isFirstComputation());
+  produceEncodedIrrDecom(*_common.makeTranslatedIdealConsumer(!encode));
 }
 
-mpz_class SliceFacade::computeDimension() {
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_translator.get() != 0);
+mpz_class SliceFacade::computeDimension(bool codimension) {
+  ASSERT(isFirstComputation());
 
-  if (_ideal->containsIdentity()) {
-	return -1;
+  if (_common.getIdeal().containsIdentity()) {
+    if (codimension) {
+      // convert to mpz_class before increment to ensure no overflow.
+      return mpz_class(_common.getIdeal().getVarCount()) + 1;
+    } else
+      return -1;
   }
 
+  // todo: inline?
   takeRadical();
-  minimize();
 
   beginAction("Preparing to compute dimension.");
 
   vector<mpz_class> v;
-  fill_n(back_inserter(v), _ideal->getVarCount(), -1);
+  fill_n(back_inserter(v), _common.getIdeal().getVarCount(), -1);
 
   endAction();
 
@@ -240,30 +136,30 @@ mpz_class SliceFacade::computeDimension() {
 #ifdef DEBUG
   // Only define hasComponents when DEBUG is defined since otherwise
   // GCC will warn about hasComponents not being used.
-  bool hasComponents = 
+  bool hasComponents =
 #endif
-	solveIrreducibleDecompositionProgram
-	(v, minusCodimension, false, true, true);
+    solveIrreducibleDecompositionProgram(v, minusCodimension, false);
   ASSERT(hasComponents);
 
-  return v.size() + minusCodimension;
+  if (codimension)
+    return -minusCodimension;
+  else
+    return v.size() + minusCodimension;
 }
 
 void SliceFacade::computePrimaryDecomposition() {
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_translator.get() != 0);
+  ASSERT(isFirstComputation());
 
-  minimize();
-
-  size_t varCount = _ideal->getVarCount();
+  size_t varCount = _common.getIdeal().getVarCount();
 
   Ideal irreducibleDecom(varCount);
-  _generatedTermConsumer.reset(new DecomRecorder(&irreducibleDecom));
-  computeIrreducibleDecomposition(true);
-  _generatedTermConsumer.reset(0);
+  {
+    DecomRecorder recorder(&irreducibleDecom);
+    produceEncodedIrrDecom(recorder);
+  }
 
   beginAction
-	("Computing primary decomposition from irreducible decomposition.");
+    ("Computing primary decomposition from irreducible decomposition.");
 
   // Do intersection of each component also using irreducible
   // decomposition of the dual. We can't use the Alexander dual
@@ -273,195 +169,164 @@ void SliceFacade::computePrimaryDecomposition() {
   // thing here.
 
   // To get actual supports.
-  _translator->setInfinityPowersToZero(irreducibleDecom);
+  _common.getTranslator().setInfinityPowersToZero(irreducibleDecom);
 
   // To collect same-support vectors together.
   irreducibleDecom.sortReverseLex();
 
   Term lcm(varCount);
-  irreducibleDecom.getLcm(lcm); 
+  irreducibleDecom.getLcm(lcm);
 
   Term tmp(varCount);
   Term support(varCount);
 
-  _ideal->clear();
-  Ideal& primaryComponentDual = *_ideal;
+  _common.getIdeal().clear();
+  Ideal& primaryComponentDual = _common.getIdeal();
   Ideal primaryComponent(varCount);
 
   DecomRecorder recorder(&primaryComponent);
 
-  getTermConsumer()->consumeRing(_translator->getNames());
-  getTermConsumer()->beginConsumingList();
+  auto_ptr<TermConsumer> consumer = _common.makeTranslatedIdealConsumer();
+  consumer->consumeRing(_common.getNames());
+  consumer->beginConsumingList();
 
   Ideal::const_iterator stop = irreducibleDecom.end();
   Ideal::const_iterator it = irreducibleDecom.begin();
   while (it != stop) {
-	// Get all vectors with same support.
-	support = *it;
-	do {
-	  tmp.encodedDual(*it, lcm);
-	  primaryComponentDual.insert(tmp);
-	  ++it;
-	} while (it != stop && support.hasSameSupport(*it));
-	ASSERT(!primaryComponentDual.isZeroIdeal());
-	
-	_translator->addPurePowersAtInfinity(primaryComponentDual);
-	{
-	  MsmStrategy strategy(&recorder, _split.get());
-	  runSliceAlgorithmWithOptions(strategy);
-	}
-	_translator->setInfinityPowersToZero(primaryComponent);
+    // Get all vectors with same support.
+    support = *it;
+    do {
+      tmp.encodedDual(*it, lcm);
+      primaryComponentDual.insert(tmp);
+      ++it;
+    } while (it != stop && support.hasSameSupport(*it));
+    ASSERT(!primaryComponentDual.isZeroIdeal());
 
-	getTermConsumer()->beginConsuming();
-	for (Ideal::const_iterator dualTerm = primaryComponent.begin();
-		 dualTerm != primaryComponent.end(); ++dualTerm) {
-	  tmp.encodedDual(*dualTerm, lcm);
-	  getTermConsumer()->consume(tmp);
-	}
-	getTermConsumer()->doneConsuming();
+    _common.getTranslator().addPurePowersAtInfinity(primaryComponentDual);
+    {
+      MsmStrategy strategy(&recorder, _split.get());
+      runSliceAlgorithmWithOptions(strategy);
+    }
+    _common.getTranslator().setInfinityPowersToZero(primaryComponent);
 
-	primaryComponent.clear();
-	primaryComponentDual.clear();
+    consumer->beginConsuming();
+    for (Ideal::const_iterator dualTerm = primaryComponent.begin();
+         dualTerm != primaryComponent.end(); ++dualTerm) {
+      tmp.encodedDual(*dualTerm, lcm);
+      consumer->consume(tmp);
+    }
+    consumer->doneConsuming();
+
+    primaryComponent.clear();
+    primaryComponentDual.clear();
   }
 
-  getTermConsumer()->doneConsumingList();
+  consumer->doneConsumingList();
 
   endAction();
 }
 
 void SliceFacade::computeMaximalStaircaseMonomials() {
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_split.get() != 0);
-
-  minimize();
-
+  ASSERT(isFirstComputation());
   beginAction("Computing maximal staircase monomials.");
 
-  getTermConsumer()->consumeRing(_translator->getNames());
-
-  {
-	MsmStrategy strategy(getTermConsumer(), _split.get());
-	runSliceAlgorithmWithOptions(strategy);
-  }
+  auto_ptr<TermConsumer> consumer = _common.makeTranslatedIdealConsumer();
+  consumer->consumeRing(_common.getNames());
+  MsmStrategy strategy(consumer.get(), _split.get());
+  runSliceAlgorithmWithOptions(strategy);
 
   endAction();
 }
 
 void SliceFacade::computeMaximalStandardMonomials() {
-  ASSERT(_translator.get() != 0);
+  ASSERT(isFirstComputation());
 
   beginAction("Preparing to compute maximal standard monomials.");
-
-  _translator->decrement();
-
+  _common.getTranslator().decrement();
   endAction();
-
   computeMaximalStaircaseMonomials();
 }
 
 void SliceFacade::computeAlexanderDual(const vector<mpz_class>& point) {
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_translator.get() != 0);
-  ASSERT(point.size() == _ideal->getVarCount());
-
-  minimize();
+  ASSERT(isFirstComputation());
+  ASSERT(point.size() == _common.getIdeal().getVarCount());
 
   beginAction("Ensuring specified point is divisible by lcm.");
-
   vector<mpz_class> lcm;
   getLcmOfIdeal(lcm);
 
   for (size_t var = 0; var < lcm.size(); ++var) {
-	if (lcm[var] > point[var]) {
-	  endAction();
-	  reportError
-		("The specified point to dualize on is not divisible by the "
-		 "least common multiple of the minimal generators of the ideal.");
-	}
+    if (lcm[var] > point[var]) {
+      endAction();
+      reportError
+        ("The specified point to dualize on is not divisible by the "
+         "least common multiple of the minimal generators of the ideal.");
+    }
   }
-
   endAction();
 
   beginAction("Preparing to compute Alexander dual.");
-
-  _translator->dualize(point);
-
+  _common.getTranslator().dualize(point);
   endAction();
 
-  computeIrreducibleDecomposition(true);
+  produceEncodedIrrDecom(*_common.makeTranslatedIdealConsumer());
 }
 
 void SliceFacade::computeAlexanderDual() {
-  ASSERT(_ideal.get() != 0);
-
-  minimize();
+  ASSERT(isFirstComputation());
 
   beginAction("Computing lcm for Alexander dual.");
-
   vector<mpz_class> lcm;
   getLcmOfIdeal(lcm);
-
   endAction();
 
   computeAlexanderDual(lcm);
 }
 
-/** @todo This method takes a radical by itself. Use the takeRadical()
-	method instead. */
 void SliceFacade::computeAssociatedPrimes() {
-  ASSERT(_ideal.get() != 0);
+  ASSERT(isFirstComputation());
 
-  size_t varCount = _ideal->getVarCount();
+  size_t varCount = _common.getIdeal().getVarCount();
 
   // Obtain generators of radical from irreducible decomposition.
   Ideal radical(varCount);
   {
-	Ideal decom(varCount);
-	_generatedTermConsumer.reset(new DecomRecorder(&decom));
-	computeIrreducibleDecomposition(true);
-	_generatedTermConsumer.reset(0);
+    Ideal decom(varCount);
+    DecomRecorder recorder(&decom);
+    produceEncodedIrrDecom(recorder);
 
-	beginAction("Computing associated primes from irreducible decomposition.");
+    beginAction("Computing associated primes from irreducible decomposition.");
 
-	Term tmp(varCount);
-	Ideal::const_iterator stop = decom.end();
-	for (Ideal::const_iterator it = decom.begin(); it != stop; ++it) {
-	  for (size_t var = 0; var < varCount; ++var) {
-		// We cannot just check whether (*it)[var] == 0, since the
-		// added fake pure powers map to zero but are not themselves
-		// zero.
-		if (_translator->getExponent(var, (*it)[var]) == 0)
-		  tmp[var] = 0;
-		else
-		  tmp[var] = 1;
-	  }
-	  radical.insert(tmp);
-	}
+    Term tmp(varCount);
+    Ideal::const_iterator stop = decom.end();
+    for (Ideal::const_iterator it = decom.begin(); it != stop; ++it) {
+      for (size_t var = 0; var < varCount; ++var) {
+        // We cannot just check whether (*it)[var] == 0, since the
+        // added fake pure powers map to zero but are not themselves
+        // zero.
+        if (_common.getTranslator().getExponent(var, (*it)[var]) == 0)
+          tmp[var] = 0;
+        else
+          tmp[var] = 1;
+      }
+      radical.insert(tmp);
+    }
   }
 
   radical.removeDuplicates();
 
-  // Construct translator for zero and one.
-  {
-	BigIdeal zeroOneIdeal(_translator->getNames());
-	zeroOneIdeal.newLastTerm(); // Add term with all exponents zero.
-	zeroOneIdeal.newLastTerm(); // Add term with all exponents one.
-	for (size_t var = 0; var < varCount; ++var)
-	  zeroOneIdeal.getLastTermExponentRef(var) = 1;
-
-	_translator.reset(new TermTranslator(zeroOneIdeal, *_ideal, false));
-  }
 
   // Output associated primes.
-  TermConsumer* consumer = getTermConsumer();
+  setToZeroOne(_common.getTranslator());
+  auto_ptr<TermConsumer> consumer = _common.makeTranslatedIdealConsumer();
 
-  consumer->consumeRing(_translator->getNames());
+  consumer->consumeRing(_common.getNames());
   consumer->beginConsuming();
   Term tmp(varCount);
   Ideal::const_iterator stop = radical.end();
   for (Ideal::const_iterator it = radical.begin(); it != stop; ++it) {
-	tmp = *it;
-	consumer->consume(tmp);
+    tmp = *it;
+    consumer->consume(tmp);
   }
   consumer->doneConsuming();
 
@@ -471,279 +336,155 @@ void SliceFacade::computeAssociatedPrimes() {
 bool SliceFacade::solveIrreducibleDecompositionProgram
 (const vector<mpz_class>& grading,
  mpz_class& optimalValue,
- bool reportAllSolutions,
- bool useBoundElimination,
- bool useBoundSimplification) {
-  ASSERT(_split.get() != 0);
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_translator.get() != 0);
-  ASSERT(grading.size() == _ideal->getVarCount());
-
-  minimize();
+ bool reportAllSolutions) {
+  ASSERT(isFirstComputation());
+  ASSERT(grading.size() == _common.getIdeal().getVarCount());
 
   beginAction("Preparing to solve optimization program.");
-
-  if (!_ideal->contains(Term(_ideal->getVarCount())))
-	_translator->addPurePowersAtInfinity(*_ideal);
-
+  if (!_common.getIdeal().containsIdentity())
+    _common.addPurePowersAtInfinity();
   endAction();
 
-  return solveProgram
-	(grading, optimalValue, reportAllSolutions,
-	 useBoundElimination, useBoundSimplification);
+  return solveProgram(grading, optimalValue, reportAllSolutions);
 }
 
 bool SliceFacade::solveStandardProgram
 (const vector<mpz_class>& grading,
  mpz_class& optimalValue,
- bool reportAllSolutions,
- bool useBoundElimination,
- bool useBoundSimplification) {
-  ASSERT(_split.get() != 0);
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_translator.get() != 0);
-  ASSERT(grading.size() == _ideal->getVarCount());
+ bool reportAllSolutions) {
+  ASSERT(isFirstComputation());
+  ASSERT(grading.size() == _common.getIdeal().getVarCount());
 
-  minimize();
-
-  _translator->decrement();
-  return solveProgram
-	(grading, optimalValue, reportAllSolutions,
-	 useBoundElimination, useBoundSimplification);
+  _common.getTranslator().decrement();
+  return solveProgram(grading, optimalValue, reportAllSolutions);
 }
 
-bool SliceFacade::solveProgram
-(const vector<mpz_class>& grading,
- mpz_class& optimalValue,
- bool reportAllSolutions,
- bool useBoundElimination,
- bool useBoundSimplification) {
-  ASSERT(_split.get() != 0);
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_translator.get() != 0);
-  ASSERT(grading.size() == _ideal->getVarCount());
-  ASSERT(_isMinimallyGenerated);
+void SliceFacade::produceEncodedIrrDecom(TermConsumer& consumer) {
+  ASSERT(isFirstComputation());
+  beginAction("Computing irreducible decomposition.");
 
-  if (_useIndependence) {
-	displayNote
-	  ("Turning off Independence splits as they are not supported\n"
-	   "for optimization.");
-	_useIndependence = false;
+  _common.addPurePowersAtInfinity();
+  MsmStrategy strategy(&consumer, _split.get());
+
+  consumer.consumeRing(_common.getNames());
+  runSliceAlgorithmWithOptions(strategy);
+
+  endAction();
+}
+
+bool SliceFacade::solveProgram(const vector<mpz_class>& grading,
+                               mpz_class& optimalValue,
+                               bool reportAllSolutions) {
+  ASSERT(isFirstComputation());
+  ASSERT(grading.size() == _common.getIdeal().getVarCount());
+
+  if (_params.getUseIndependenceSplits()) {
+    displayNote
+      ("Turning off Independence splits as they are not supported\n"
+       "for optimization.");
+    _params.useIndependenceSplits(false);
   }
 
-  if (useBoundSimplification && !useBoundElimination) {
-	displayNote
-	  ("Bound simplification requires using the bound to eliminate\n"
-	   "non-improving slices, which has been turned off. Am now turning\n"
-	   "this on.");
-	useBoundElimination = true;			   
+  if (_params.getUseBoundSimplification() &&
+      !_params.getUseBoundElimination()) {
+    displayNote
+      ("Bound simplification requires using the bound to eliminate\n"
+       "non-improving slices, which has been turned off. Am now turning\n"
+       "this on.");
+    _params.useBoundElimination(true);
   }
 
   beginAction("Solving optimization program.");
 
   OptimizeStrategy::BoundSetting boundSetting;
-  if (useBoundSimplification) {
-	ASSERT(useBoundElimination);
-	boundSetting = OptimizeStrategy::UseBoundToEliminateAndSimplify;
-  } else if (useBoundElimination)
-	boundSetting = OptimizeStrategy::UseBoundToEliminate;
+  if (_params.getUseBoundSimplification()) {
+    ASSERT(_params.getUseBoundElimination());
+    boundSetting = OptimizeStrategy::UseBoundToEliminateAndSimplify;
+  } else if (_params.getUseBoundElimination())
+    boundSetting = OptimizeStrategy::UseBoundToEliminate;
   else
-	boundSetting = OptimizeStrategy::DoNotUseBound;
+    boundSetting = OptimizeStrategy::DoNotUseBound;
 
-  TermGrader grader(grading, *_translator);
+  TermGrader grader(grading, _common.getTranslator());
   OptimizeStrategy strategy
-	(grader, _split.get(), reportAllSolutions, boundSetting);
+    (grader, _split.get(), reportAllSolutions, boundSetting);
   runSliceAlgorithmWithOptions(strategy);
 
   endAction();
 
   const Ideal& solution = strategy.getMaximalSolutions();
 
-  TermConsumer* consumer = getTermConsumer();
-  consumer->consumeRing(_translator->getNames());
+  auto_ptr<TermConsumer> consumer = _common.makeTranslatedIdealConsumer();
+  consumer->consumeRing(_common.getNames());
   consumer->consume(solution);
 
   if (solution.isZeroIdeal())
-	return false;
+    return false;
   else {
-	optimalValue = strategy.getMaximalValue();
-	return true;  
+    optimalValue = strategy.getMaximalValue();
+    return true;
   }
 }
 
-void SliceFacade::initialize(const BigIdeal& ideal) {
-  // Only call once.
-  ASSERT(_ideal.get() == 0);
-  ASSERT(_translator.get() == 0);
-
-  beginAction("Translating ideal to internal data structure.");
-
-  _ideal.reset(new Ideal(ideal.getVarCount()));
-  _translator.reset(new TermTranslator(ideal, *_ideal, false));
-
-  endAction();
-}
-
-void SliceFacade::minimize() {
-  ASSERT(_ideal.get() != 0);
-
-  if (_isMinimallyGenerated)
-	return;
-
-  beginAction("Minimizing ideal.");
-
-  _ideal->minimize();
-  _isMinimallyGenerated = true;
-
-  endAction();
+bool SliceFacade::isFirstComputation() const {
+  return _common.hasIdeal();
 }
 
 void SliceFacade::takeRadical() {
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_translator.get() != 0);
+  ASSERT(isFirstComputation());
 
   beginAction("Taking radical of ideal.");
 
   bool skip = false;
-  if (_isMinimallyGenerated) {
-	Term lcm(_ideal->getVarCount());
-	_ideal->getLcm(lcm);
-	if (lcm.isSquareFree())
-	  skip = true;
-  }
+  Term lcm(_common.getIdeal().getVarCount());
+  _common.getIdeal().getLcm(lcm);
+  if (lcm.isSquareFree())
+    skip = true;
 
   if (!skip) {
-	_translator->setInfinityPowersToZero(*_ideal);
-	_ideal->takeRadicalNoMinimize();
-	_isMinimallyGenerated = false;
+    _common.getTranslator().setInfinityPowersToZero(_common.getIdeal());
+    _common.getIdeal().takeRadicalNoMinimize();
+    _common.getIdeal().minimize();
   }
 
-  // Construct translator for zero and one.
-  {
-	BigIdeal zeroOneIdeal(_translator->getNames());
-	zeroOneIdeal.newLastTerm(); // Add term with all exponents zero.
-	zeroOneIdeal.newLastTerm(); // Add term with all exponents one.
-	for (size_t var = 0; var < _ideal->getVarCount(); ++var)
-	  zeroOneIdeal.getLastTermExponentRef(var) = 1;
-
-	Ideal dummy;
-	_translator.reset(new TermTranslator(zeroOneIdeal, dummy, false));
-  }
+  setToZeroOne(_common.getTranslator());
 
   endAction();
 }
 
 void SliceFacade::getLcmOfIdeal(vector<mpz_class>& bigLcm) {
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_translator.get() != 0);
+  ASSERT(isFirstComputation());
 
-  Term lcm(_ideal->getVarCount());
-  _ideal->getLcm(lcm);
+  Term lcm(_common.getIdeal().getVarCount());
+  _common.getIdeal().getLcm(lcm);
 
   bigLcm.clear();
-  bigLcm.reserve(_ideal->getVarCount());
-  for (size_t var = 0; var < _ideal->getVarCount(); ++var)
-	bigLcm.push_back(_translator->getExponent(var, lcm));
+  bigLcm.reserve(_common.getIdeal().getVarCount());
+  for (size_t var = 0; var < _common.getIdeal().getVarCount(); ++var)
+    bigLcm.push_back(_common.getTranslator().getExponent(var, lcm));
 }
 
 void SliceFacade::runSliceAlgorithmWithOptions(SliceStrategy& strategy) {
-  strategy.setUseIndependence(_useIndependence);
-  strategy.setUseSimplification(_useSimplification);
+  ASSERT(isFirstComputation());
+  strategy.setUseIndependence(_params.getUseIndependenceSplits());
+  strategy.setUseSimplification(_params.getUseSimplification());
 
   SliceStrategy* strategyWithOptions = &strategy;
 
   auto_ptr<SliceStrategy> debugStrategy;
-  if (_printDebug) {
-	debugStrategy.reset
-	  (new DebugStrategy(strategyWithOptions, stderr));
-	strategyWithOptions = debugStrategy.get();
+  if (_params.getPrintDebug()) {
+    debugStrategy.reset
+      (new DebugStrategy(strategyWithOptions, stderr));
+    strategyWithOptions = debugStrategy.get();
   }
 
   auto_ptr<SliceStrategy> statisticsStrategy;
-  if (_printStatistics) {
-	statisticsStrategy.reset
-	  (new StatisticsStrategy(strategyWithOptions, stderr));
-	strategyWithOptions = statisticsStrategy.get();
+  if (_params.getPrintStatistics()) {
+    statisticsStrategy.reset
+      (new StatisticsStrategy(strategyWithOptions, stderr));
+    strategyWithOptions = statisticsStrategy.get();
   }
 
   ASSERT(strategyWithOptions != 0);
-  ASSERT(_ideal.get() != 0);
-
-  ::runSliceAlgorithm(*_ideal, *strategyWithOptions);
-}
-
-void SliceFacade::doIrreducibleIdealOutput() {
-  ASSERT(_translator.get() != 0);
-  ASSERT(_out != 0);
-  ASSERT(_generatedTermConsumer.get() == 0);
-  ASSERT(_ioHandler != 0);
-  ASSERT(_termConsumer == 0);
-
-  auto_ptr<BigTermConsumer> writer = _ioHandler->createIdealWriter(_out);
-  auto_ptr<BigTermConsumer> splitter(new IrreducibleIdealSplitter(writer));
-  auto_ptr<BigTermConsumer> translated
-	(new TranslatingTermConsumer(splitter, *_translator));
-  _generatedTermConsumer = translated;
-
-  if (_canonicalOutput) {
-	auto_ptr<TermConsumer> newTermConsumer
-	  (new CanonicalTermConsumer
-	   (_generatedTermConsumer, _ideal->getVarCount(), _translator.get()));
-	_generatedTermConsumer = newTermConsumer;
-  }
-
-  ASSERT(_generatedTermConsumer.get() != 0);
-}
-
-TermConsumer* SliceFacade::getTermConsumer() {
-  ASSERT(_translator.get() != 0);
-
-  if (_generatedTermConsumer.get() == 0) {
-	if (_termConsumer != 0) {
-	  _generatedTermConsumer.reset
-		(new TranslatingTermConsumer(*_termConsumer, *_translator));
-	} else {
-	  ASSERT(_ioHandler != 0);
-	  ASSERT(_out != 0);
-	  auto_ptr<BigTermConsumer> untranslated =
-		_ioHandler->createIdealWriter(_out);
-	  _generatedTermConsumer.reset
-		(new TranslatingTermConsumer(untranslated, *_translator));
-	}
-
-	if (_canonicalOutput) {
-	  TermConsumer* newTermConsumer = new CanonicalTermConsumer
-		(_generatedTermConsumer, _ideal->getVarCount(), _translator.get());
-	  _generatedTermConsumer.reset(newTermConsumer);
-	}
-  }
-  ASSERT(_generatedTermConsumer.get() != 0);
-
-  return _generatedTermConsumer.get();
-}
-
-CoefTermConsumer* SliceFacade::getCoefTermConsumer() {
-  ASSERT(_ideal.get() != 0);
-  ASSERT(_translator.get() != 0);
-
-  if (_generatedCoefTermConsumer.get() == 0) {
-	if (_coefTermConsumer != 0) {
-	  _generatedCoefTermConsumer.reset
-		(new TranslatingCoefTermConsumer(*_coefTermConsumer, *_translator));
-	} else {
-	  ASSERT(_ioHandler != 0);
-	  ASSERT(_out != 0);
-
-	  auto_ptr<CoefBigTermConsumer> untranslated
-		(_ioHandler->createPolynomialWriter(_out));
-	  _generatedCoefTermConsumer.reset
-		(new TranslatingCoefTermConsumer(untranslated, *_translator));
-	}
-
-	if (_canonicalOutput)
-	  _generatedCoefTermConsumer.reset
-		(new CanonicalCoefTermConsumer(_generatedCoefTermConsumer));
-  }
-
-  return _generatedCoefTermConsumer.get();
+  strategyWithOptions->run(_common.getIdeal());
 }

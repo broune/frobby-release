@@ -17,10 +17,8 @@
 #include "stdinc.h"
 #include "MaximalStandardAction.h"
 
-#include "BigIdeal.h"
 #include "SliceFacade.h"
-#include "IOFacade.h"
-#include "Scanner.h"
+#include "SliceParams.h"
 #include "DataType.h"
 
 MaximalStandardAction::MaximalStandardAction():
@@ -33,7 +31,13 @@ MaximalStandardAction::MaximalStandardAction():
  "lie in the\nideal for every variable v in the ambient polynomial ring of I.",
  false),
 
-  _io(DataType::getMonomialIdealType(), DataType::getMonomialIdealType()) {
+  _io(DataType::getMonomialIdealType(), DataType::getMonomialIdealType()),
+
+  _increment
+  ("increment",
+   "Increase each entry of the output by 1 to compute maximal staircase\n"
+   "monomials in place of maximal standard monomials.",
+   false) {
 }
 
 const char* MaximalStandardAction::staticGetName() {
@@ -43,26 +47,16 @@ const char* MaximalStandardAction::staticGetName() {
 void MaximalStandardAction::obtainParameters(vector<Parameter*>& parameters) {
   _io.obtainParameters(parameters);
   _sliceParams.obtainParameters(parameters);
+  parameters.push_back(&_increment);
   Action::obtainParameters(parameters);
 }
 
 void MaximalStandardAction::perform() {
-  BigIdeal ideal;
-
-  _sliceParams.validateSplit(true, false);
-
-  {
-	Scanner in(_io.getInputFormat(), stdin);
-	_io.autoDetectInputFormat(in);
-	_io.validateFormats();
-
-	IOFacade ioFacade(_printActions);
-	ioFacade.readIdeal(in, ideal);
-	in.expectEOF();
-  }
-
-  auto_ptr<IOHandler> output = _io.createOutputHandler();
-  SliceFacade facade(ideal, output.get(), stdout, _printActions);
-  _sliceParams.apply(facade);
-  facade.computeMaximalStandardMonomials();
+  SliceParams params(_params);
+  validateSplit(params, true, false);
+  SliceFacade facade(params, DataType::getMonomialIdealListType());
+  if (_increment)
+    facade.computeMaximalStaircaseMonomials();
+  else
+    facade.computeMaximalStandardMonomials();
 }

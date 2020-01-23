@@ -17,49 +17,25 @@
 #ifndef VAR_NAMES_GUARD
 #define VAR_NAMES_GUARD
 
+#include "HashMap.h"
+
 #include <vector>
 #include <string>
 
 class Scanner;
 
-// Use the GCC-specific hash_map class if compiling with GCC, and
-// otherwise use a std::map, which is present in all compilers.
-/** @todo It seems that Frobby comes with its own copy of
-	hash_map. Always use that one here, or find out why it isn't used.
- */
-#ifdef __GNUC__ // Only GCC defines this macro
-#include "hash_map/hash_map"
-class StringEquals {
- public:
-  bool operator()(const char* a, const char* b) const {
-	return strcmp(a, b) == 0;
-  }
-};
-typedef __gnu_cxx::hash_map<string, size_t,
-							__gnu_cxx::hash<string> > VarNameMap;
-#else
-#include <map>
-class StringLessThan {
- public:
-  bool operator()(const char* a, const char* b) const {
-	return strcmp(a, b) < 0;
-  }
-};
-typedef map<string, size_t> VarNameMap;
-#endif
-
 /** Defines the variables of a polynomial ring and facilities IO
-	involving them.
+    involving them.
 
-	@todo Rename to Ring or a similar name.
+    @todo Rename to Ring or a similar name.
 
-	@todo make this class immutable and make a VarNamesBuilder.
-	
-	@todo make copies share the same memory and use reference counting
-	to deallocate the shared memory.
-	
-	@todo make equality check for the same memory and thus return true very
-	quickly if that is the case.
+    @todo make this class immutable and make a VarNamesBuilder.
+
+    @todo make copies share the same memory and use reference counting
+    to deallocate the shared memory.
+
+    @todo make equality check for the same memory and thus return true very
+    quickly if that is the case.
 */
 class VarNames {
 public:
@@ -69,21 +45,21 @@ public:
   ~VarNames();
 
   /** Adds the variable and returns true if name is not already a variable.
-	  Otherwise it returns false without adding the variable (again).
+      Otherwise it returns false without adding the variable (again).
   */
   bool addVar(const string& name);
 
   /** As addvar, except it reports a syntax error if name is already a
-	  variable.
+      variable.
 
-	  @todo Move this somewhere more appropriate.
+      @todo Move this somewhere more appropriate.
   */
   void addVarSyntaxCheckUnique(const Scanner& in, const string& name);
 
   /** This also depends on the order of the names. */
   bool operator<(const VarNames& names) const;
 
-  /** Returns VarNames::getInvalidIndex() if name is not known. */
+  /** Returns VarNames::invalidIndex() if name is not known. */
   size_t getIndex(const string& name) const;
 
   /** Returns true if name is the name of a variable. */
@@ -93,10 +69,10 @@ public:
   bool namesAreDefault() const;
 
   /** The returned reference can become invalid next time addVar is
-	  called.
+      called.
   */
   const string& getName(size_t index) const;
-  
+
   /** Returns the current number of variables. */
   size_t getVarCount() const;
 
@@ -113,17 +89,28 @@ public:
   /** Swaps the variables with indexes a and b. */
   void swapVariables(size_t a, size_t b);
 
+  void projectVar(size_t index);
+
   void toString(string& str) const;
   void print(FILE* file) const; // For debug
 
+  void swap(VarNames& names);
+
   /** Returns a fixed variable offset that is always invalid. */
-  static size_t getInvalidIndex();
+  static const size_t invalidIndex = static_cast<size_t>(-1);
 
 private:
   static bool compareNames(const string* a, const string* b);
 
+  typedef HashMap<string, size_t> VarNameMap;
   VarNameMap _nameToIndex;
   vector<const string*> _indexToName;
 };
+
+
+
+inline size_t VarNames::getVarCount() const {
+  return _indexToName.size();
+}
 
 #endif

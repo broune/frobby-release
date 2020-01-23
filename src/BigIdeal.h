@@ -22,6 +22,7 @@
 
 class TermTranslator;
 class Ideal;
+class SquareFreeIdeal;
 
 class BigIdeal {
 public:
@@ -30,6 +31,7 @@ public:
 
   void insert(const Ideal& ideal);
   void insert(const Ideal& ideal, const TermTranslator& translator);
+  void insert(const SquareFreeIdeal& ideal);
   void insert(const vector<mpz_class>& term);
 
   void renameVars(const VarNames& names);
@@ -52,6 +54,8 @@ public:
   vector<mpz_class>& operator[](size_t index);
   const vector<mpz_class>& operator[](size_t index) const;
 
+  void projectVar(size_t var);
+
   // This also depends on the order of the variables.
   bool operator<(const BigIdeal& ideal) const;
 
@@ -61,7 +65,7 @@ public:
 
   void clear();
 
-  size_t getGeneratorCount() const;
+  inline size_t getGeneratorCount() const;
   size_t getVarCount() const;
 
   void clearAndSetNames(const VarNames& names);
@@ -92,19 +96,57 @@ public:
   // Sorts the variables.
   void sortVariables();
 
+  void swap(BigIdeal& ideal);
+
   void print(FILE* file) const;
   void print(ostream& out) const;
 
   static bool bigTermCompare(const vector<mpz_class>& a,
-							 const vector<mpz_class>& b);
+                             const vector<mpz_class>& b);
 private:
-
-  vector<string> _variables;
   vector<vector<mpz_class> > _terms;
   VarNames _names;
 };
 
 ostream& operator<<(ostream& out, const BigIdeal& ideal);
 ostream& operator<<(ostream& out, const vector<BigIdeal>& ideals);
+
+
+
+inline vector<mpz_class>& BigIdeal::operator[](size_t index) {
+  ASSERT(index < _terms.size());
+  return _terms[index];
+}
+
+inline const vector<mpz_class>& BigIdeal::operator[](size_t index) const {
+  ASSERT(index < _terms.size());
+  return _terms[index];
+}
+
+inline mpz_class& BigIdeal::getLastTermExponentRef(size_t var) {
+  ASSERT(!empty());
+  ASSERT(var < _names.getVarCount());
+
+  return _terms.back()[var];
+}
+
+inline vector<mpz_class>& BigIdeal::getLastTermRef() {
+  ASSERT(!empty());
+
+  return _terms.back();
+}
+
+inline const vector<mpz_class>& BigIdeal::getTerm(size_t term) const {
+  ASSERT(term < getGeneratorCount());
+  return _terms[term];
+}
+
+inline size_t BigIdeal::getGeneratorCount() const {
+  return _terms.size();
+}
+
+inline size_t BigIdeal::getVarCount() const {
+  return _names.getVarCount();
+}
 
 #endif

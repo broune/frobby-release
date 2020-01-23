@@ -14,7 +14,15 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see http://www.gnu.org/licenses/.
 */
+/** \file stdinc.h
+ This header file includes common definitions and is included as the
+ first line of code in every implementation file (.cpp). Thus it is
+ never necessary to include it in headers, and anything defined here
+ is defined everywhere throughout the code base.
+*/
+
 #ifdef _MSC_VER // For Microsoft Compiler in Visual Studio C++.
+#define _SCL_SECURE_NO_WARNINGS
 #pragma warning (push, 1) // Reduce warning level for GMP headers.
 #endif
 
@@ -32,6 +40,7 @@
 #pragma warning (disable: 4127) // Warns about using "while (true)".
 #pragma warning (disable: 4100) // Warns about unused parameters.
 #pragma warning (disable: 4800) // Warns on int to bool conversion.
+#pragma warning (disable: 4146) // Warns on unary minus on unsigned (bit trick)
 
 // This warning warns about using the this pointer in base member
 // initializer lists. This is a pretty good warning as that can
@@ -39,16 +48,21 @@
 // so the warning is turned off.
 #pragma warning (disable: 4355)
 
-// MSC's map header has an issue where you get a syntax error if you
-// define a macro for new like we do below. We work around this by including
-// map before we define the macro.
-#include <map>
-
 #ifdef _DEBUG
+#ifndef DEBUG
 #define DEBUG
 #endif
 #endif
 
+#ifdef DEBUG
+// MSC's map header has an issue where you get a syntax error if you
+// define a macro for new like we do below. We work around this by including
+// map before we define the macro.
+#include <map>
+#endif
+#endif
+
+#include <cstddef>
 #include <memory>
 using namespace std;
 
@@ -64,7 +78,8 @@ void* operator new[](size_t s, const char* file, size_t line)
   throw (std::bad_alloc);
 void operator delete(void* s, const char* file, size_t line);
 void operator delete[](void* s, const char* file, size_t line);
-#define new new (__FILE__, __LINE__)
+#define NEW_MACRO new (__FILE__, __LINE__)
+#define new NEW_MACRO
 #else
 #define IF_DEBUG(X)
 #define ASSERT(X)
@@ -72,6 +87,17 @@ void operator delete[](void* s, const char* file, size_t line);
 
 typedef unsigned int Exponent;
 
+/// The native unsigned type for the CPU. An incorrect type can result in
+/// worse performance but all computations must still be correct.
+typedef unsigned long Word;
+static const size_t BitsPerWord = 8 * sizeof(Word);
+
+/// The alignment that memory allocators must ensure. In other words
+/// allocators must return pointer addresses that are divisible by
+/// MemoryAlignment. MemoryAlignment must be a power of 2.
+static const size_t MemoryAlignment = sizeof(long);
+
+/** @todo: move this elsewhere. */
 namespace constants {
-  extern const char* version;
+  extern const char* const version;
 }

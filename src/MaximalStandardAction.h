@@ -20,6 +20,7 @@
 #include "Action.h"
 #include "IOParameters.h"
 #include "SliceParameters.h"
+#include "BoolParameter.h"
 
 class MaximalStandardAction : public Action {
  public:
@@ -34,6 +35,7 @@ class MaximalStandardAction : public Action {
  private:
   SliceParameters _sliceParams;
   IOParameters _io;
+  BoolParameter _increment;
 };
 
 #endif

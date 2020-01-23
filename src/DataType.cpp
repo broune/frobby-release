@@ -30,7 +30,11 @@ bool DataType::isNull() const {
 }
 
 bool DataType::operator==(const DataType& type) const {
-  return getName() == type.getName();
+  return this == &type; // There is only one object of each kind.
+}
+
+bool DataType::operator!=(const DataType& type) const {
+  return this != &type; // There is only one object of each kind.
 }
 
 const DataType& DataType::getNullType() {
@@ -52,10 +56,16 @@ const DataType& DataType::getMonomialIdealListType() {
   return type;
 }
 
+const DataType& DataType::getSatBinomIdealType() {
+  static DataType type("a saturated binomial ideal");
+  return type;
+}
+
 vector<const DataType*> DataType::getTypes() {
   vector<const DataType*> types;
   types.push_back(&getMonomialIdealType());
   types.push_back(&getMonomialIdealListType());
   types.push_back(&getPolynomialType());
+  types.push_back(&getSatBinomIdealType());
   return types;
 }

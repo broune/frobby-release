@@ -24,9 +24,11 @@
 #include "BigIdeal.h"
 #include "BigTermConsumer.h"
 #include "NullTermConsumer.h"
+#include "SliceParams.h"
 #include "error.h"
 
 #include <algorithm>
+#include <iterator>
 
 OptimizeAction::OptimizeAction():
   Action
@@ -102,80 +104,76 @@ void OptimizeAction::obtainParameters(vector<Parameter*>& parameters) {
 }
 
 void OptimizeAction::perform() {
-  _sliceParams.validateSplit(true, true);
+  SliceParams params(_params);
+  validateSplit(params, true, true);
 
   BigIdeal ideal;
   vector<mpz_class> v;
   {
-	Scanner in(_io.getInputFormat(), stdin);
-	_io.autoDetectInputFormat(in);
-	_io.validateFormats();
+    Scanner in(_io.getInputFormat(), stdin);
+    _io.autoDetectInputFormat(in);
+    _io.validateFormats();
 
-	IOFacade ioFacade(_printActions);
-	ioFacade.readIdeal(in, ideal);
-	if (!in.matchEOF())
-	  ioFacade.readVector(in, v, ideal.getVarCount());
-	else
-	  fill_n(back_inserter(v), ideal.getVarCount(), 1);
-	in.expectEOF();
+    IOFacade ioFacade(_printActions);
+    ioFacade.readIdeal(in, ideal);
+    if (!in.matchEOF())
+      ioFacade.readVector(in, v, ideal.getVarCount());
+    else
+      fill_n(back_inserter(v), ideal.getVarCount(), 1);
+    in.expectEOF();
   }
 
   mpz_class subtract = 0;
   if (_chopFirstAndSubtract) {
-	if (v.empty()) {
-	  _chopFirstAndSubtract = false;
-	} else {
-	  subtract = v[0];
+    if (v.empty()) {
+      _chopFirstAndSubtract = false;
+    } else {
+      subtract = v[0];
 
-	  v.erase(v.begin());
-	  ideal.eraseVar(0);
-	}
+      v.erase(v.begin());
+      ideal.eraseVar(0);
+    }
   }
 
   if (_minimizeValue) {
-	for (size_t var = 0; var < v.size(); ++var)
-	  v[var] = -v[var];
+    for (size_t var = 0; var < v.size(); ++var)
+      v[var] = -v[var];
   }
 
   auto_ptr<IOHandler> handler;
   auto_ptr<BigTermConsumer> output;
   if (_displayLevel > 0) {
-	handler = _io.createOutputHandler();
-	output = handler->createIdealWriter(stdout);
+    handler = _io.createOutputHandler();
+    output = handler->createIdealWriter(stdout);
   } else
-	output.reset(new NullTermConsumer());
+    output.reset(new NullTermConsumer());
 
-  SliceFacade facade(ideal, output.get(), _printActions);
-  _sliceParams.apply(facade);
+  SliceFacade facade(params, ideal, *output);
 
   mpz_class optimalValue = 0;
 
   bool displayAll = (_displayLevel >= 2);
-  bool useBoundElimination = _sliceParams.getUseBoundElimination();
-  bool useBoundSimplification = _sliceParams.getUseBoundSimplification();
   bool anySolution;
   if (_maxStandard)
-	anySolution = facade.solveStandardProgram
-	  (v, optimalValue, displayAll,
-	   useBoundElimination, useBoundSimplification);
+    anySolution = facade.solveStandardProgram
+      (v, optimalValue, displayAll);
   else
-	anySolution = facade.solveIrreducibleDecompositionProgram
-	  (v, optimalValue, displayAll,
-	   useBoundElimination, useBoundSimplification);
+    anySolution = facade.solveIrreducibleDecompositionProgram
+      (v, optimalValue, displayAll);
 
   if (_displayValue) {
-	if (!anySolution)
-	  fputs("no solution.\n", stdout);
-	else {
-	  if (_minimizeValue) {
-		// We flipped the sign of the vector to optimize before, so we
-		// need to flip the sign of the value again.
-		optimalValue = -optimalValue;
-	  }
-	  if (_chopFirstAndSubtract)
-		optimalValue -= subtract;
-	  gmp_fprintf(stdout, "%Zd\n", optimalValue.get_mpz_t());
-	}
+    if (!anySolution)
+      fputs("no solution.\n", stdout);
+    else {
+      if (_minimizeValue) {
+        // We flipped the sign of the vector to optimize before, so we
+        // need to flip the sign of the value again.
+        optimalValue = -optimalValue;
+      }
+      if (_chopFirstAndSubtract)
+        optimalValue -= subtract;
+      gmp_fprintf(stdout, "%Zd\n", optimalValue.get_mpz_t());
+    }
   }
 }
 

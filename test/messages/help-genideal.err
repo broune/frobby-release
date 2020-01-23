@@ -1,0 +1,32 @@
+Displaying information on action: genideal
+
+Generate a monomial ideal. The default is to generate a random one,
+and in certain rare cases the generated ideal may have less than the requested
+number of minimial generators. This can be alleviated by increasing the
+exponent range or the number of variables.
+
+The other types of ideals are not random, and they use the number of variables
+as a parameter and may thus have more generators, depending on the type.
+
+The parameters accepted by genideal are as follows.
+
+ -expRange INTEGER   (default is 9)
+   Exponents are chosen uniformly in the range [0,INTEGER].
+
+ -genCount INTEGER   (default is 5)
+   The number of minimal generators.
+
+ -oformat STRING   (default is m2)
+   The format used to write the output. This action supports the formats:
+     4ti2 cocoa4 count m2 monos newmonos null singular.
+   Type 'frobby help io' for more information on output formats.
+
+ -time [BOOL]   (default is off)
+   Display and time each subcomputation.
+
+ -type STRING   (default is random)
+   The supported types of ideals are random, edge, list, king, knight, rook,
+   matching and tree.
+
+ -varCount INTEGER   (default is 3)
+   The number of variables.

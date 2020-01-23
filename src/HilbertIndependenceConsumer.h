@@ -21,30 +21,29 @@
 #include "Term.h"
 #include "Ideal.h"
 #include "CoefTermConsumer.h"
-#include "SliceEvent.h"
+#include "Task.h"
 
 #include <vector>
 
 class IndependenceSplitter;
 class HilbertStrategy;
 
-class HilbertIndependenceConsumer : public CoefTermConsumer,
-									public SliceEvent {
+class HilbertIndependenceConsumer : public CoefTermConsumer, public Task {
 public:
   HilbertIndependenceConsumer(HilbertStrategy* strategy);
 
   void reset(CoefTermConsumer* parent,
-			 IndependenceSplitter& splitter,
-			 size_t varCount);
+             IndependenceSplitter& splitter,
+             size_t varCount);
 
   void clear();
 
-  virtual void raiseEvent();
+  virtual void run(TaskEngine& engine);
   virtual void dispose();
 
   CoefTermConsumer* getLeftConsumer();
 
-  virtual void consumeRing(const VarNames& names); // Does nothing.	
+  virtual void consumeRing(const VarNames& names); // Does nothing.
   virtual void beginConsuming(); // Does nothing.
   virtual void consume(const mpz_class& coef, const Term& term);
   virtual void doneConsuming(); // Does nothing.
@@ -58,15 +57,15 @@ public:
 private:
   class RightConsumer : public CoefTermConsumer {
   public:
-	RightConsumer(HilbertIndependenceConsumer* parent);
+    RightConsumer(HilbertIndependenceConsumer* parent);
 
-	virtual void consumeRing(const VarNames& names); // Does nothing.	
-	virtual void beginConsuming(); // Does nothing.
-	virtual void consume(const mpz_class& coef, const Term& term);
-	virtual void doneConsuming(); // Does nothing.
+    virtual void consumeRing(const VarNames& names); // Does nothing.
+    virtual void beginConsuming(); // Does nothing.
+    virtual void consume(const mpz_class& coef, const Term& term);
+    virtual void doneConsuming(); // Does nothing.
 
   private:
-	HilbertIndependenceConsumer* _parent;
+    HilbertIndependenceConsumer* _parent;
   };
 
   virtual void consumeLeft(const mpz_class& leftCoef, const Term& leftTerm);

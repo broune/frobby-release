@@ -20,9 +20,10 @@
 #include "BigIdeal.h"
 #include "IOFacade.h"
 #include "SliceFacade.h"
+#include "SliceParams.h"
 #include "BigTermRecorder.h"
 #include "Scanner.h"
-#include "error.h"
+#include "display.h"
 
 FrobeniusAction::FrobeniusAction():
   Action
@@ -40,7 +41,7 @@ FrobeniusAction::FrobeniusAction():
  "paper \"Solving Thousand Digit Frobenius Problems Using Grobner Bases\"\n"
  "at www.broune.com for more details.",
  false),
-  
+
   _sliceParams(true, false),
   _displaySolution
 ("vector",
@@ -58,11 +59,12 @@ void FrobeniusAction::obtainParameters(vector<Parameter*>& parameters) {
 
 void FrobeniusAction::perform() {
   displayNote
-	("The action frobgrob is DEPRECATED, and will be removed in a future "
-	 "release of Frobby. Use the action optimize with options "
-	 "-chopFirstAndSubtract and -maxStandard instead to get the same effect.");
+    ("The action frobgrob is DEPRECATED, and will be removed in a future "
+     "release of Frobby. Use the action optimize with options "
+     "-chopFirstAndSubtract and -maxStandard instead to get the same effect.");
 
-  _sliceParams.validateSplit(true, true);
+  SliceParams params(_params);
+  validateSplit(params, true, true);
 
   vector<mpz_class> instance;
   BigIdeal ideal;
@@ -77,13 +79,9 @@ void FrobeniusAction::perform() {
 
   BigTermRecorder recorder;
 
-  SliceFacade facade(ideal, &recorder, _printActions);
-  _sliceParams.apply(facade);
+  SliceFacade facade(params, ideal, recorder);
   mpz_class dummy;
-  facade.solveStandardProgram
-	(shiftedDegrees, dummy, false,
-	 _sliceParams.getUseBoundElimination(),
-	 _sliceParams.getUseBoundSimplification());
+  facade.solveStandardProgram(shiftedDegrees, dummy, false);
 
   BigIdeal maxSolution = *(recorder.releaseIdeal());
 
@@ -92,13 +90,13 @@ void FrobeniusAction::perform() {
 
   mpz_class frobeniusNumber = -instance[0];
   for (size_t i = 1; i < instance.size(); ++i)
-	frobeniusNumber += bigVector[i - 1] * instance[i];
+    frobeniusNumber += bigVector[i - 1] * instance[i];
 
   if (_displaySolution) {
-	fputs("(-1", stdout);
-	for (size_t i = 0; i < bigVector.size(); ++i)
-	  gmp_fprintf(stdout, ", %Zd", bigVector[i].get_mpz_t());
-	fputs(")\n", stdout);
+    fputs("(-1", stdout);
+    for (size_t i = 0; i < bigVector.size(); ++i)
+      gmp_fprintf(stdout, ", %Zd", bigVector[i].get_mpz_t());
+    fputs(")\n", stdout);
   }
 
   gmp_fprintf(stdout, "%Zd\n", frobeniusNumber.get_mpz_t());

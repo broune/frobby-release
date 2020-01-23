@@ -22,14 +22,16 @@
 #include "Ideal.h"
 
 class CoefTermConsumer;
+class HilbertStrategy;
 
 class HilbertSlice : public Slice {
  public:
-  HilbertSlice();
-  HilbertSlice(const Ideal& ideal,
-			   const Ideal& subtract,
-			   const Term& multiply,
-			   CoefTermConsumer* consumer);
+  HilbertSlice(HilbertStrategy& strategy);
+  HilbertSlice(HilbertStrategy& strategy,
+               const Ideal& ideal,
+               const Ideal& subtract,
+               const Term& multiply,
+               CoefTermConsumer* consumer);
 
   CoefTermConsumer* getConsumer() {return _consumer;}
 
@@ -42,8 +44,8 @@ class HilbertSlice : public Slice {
   virtual bool simplifyStep();
 
   void setToProjOf(const Slice& slice,
-				   const Projection& projection,
-				   CoefTermConsumer* consumer);
+                   const Projection& projection,
+                   CoefTermConsumer* consumer);
 
   // Efficiently swaps the values of *this and slice while avoiding
   // copies.

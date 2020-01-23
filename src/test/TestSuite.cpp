@@ -18,6 +18,7 @@
 #include "TestSuite.h"
 
 #include "TestVisitor.h"
+#include <algorithm>
 
 TestSuite::TestSuite(const string& name):
   Test(name) {
@@ -30,17 +31,17 @@ void TestSuite::add(Test* test) {
 
 namespace {
   /** Follows pointers before comparing values. Helper function for
-	  TestSuite::sortTests.
+      TestSuite::sortTests.
    */
   bool comparePointedToValue(const Test* a, const Test* b) {
-	ASSERT(a != 0);
-	ASSERT(b != 0);
-	return *a < *b;
+    ASSERT(a != 0);
+    ASSERT(b != 0);
+    return *a < *b;
   }
 }
 
 void TestSuite::sortTests() {
-  sort(begin(), end(), comparePointedToValue);
+  std::sort(begin(), end(), comparePointedToValue);
 }
 
 TestSuite::TestIterator TestSuite::begin() {

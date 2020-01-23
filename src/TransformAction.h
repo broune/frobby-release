@@ -20,6 +20,7 @@
 #include "Action.h"
 #include "IOParameters.h"
 #include "BoolParameter.h"
+#include "IntegerParameter.h"
 
 class BigIdeal;
 
@@ -45,6 +46,10 @@ class TransformAction : public Action {
   BoolParameter _radical;
   BoolParameter _product;
   BoolParameter _addPurePowers;
+  BoolParameter _trimVariables;
+  BoolParameter _transpose;
+  BoolParameter _swap01;
+  IntegerParameter _projectVar;
 };
 
 #endif

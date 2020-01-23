@@ -31,7 +31,7 @@ TransformAction::TransformAction():
   Action
 (staticGetName(),
  "Change the representation of the input ideal.",
- "By default, transform simply writes the input ideals to output. A\n"
+ "By default, transform simply writes the input ideals to output. A "
  "number of parameters allow to transform the input ideal in various ways.",
  false),
 
@@ -64,7 +64,7 @@ TransformAction::TransformAction():
 
   _radical
   ("radical",
-   "Take the radical of the generators. Combine this with -minimize to\n"
+   "Take the radical of the generators. Combine this with -minimize to "
    "get rid of any non-minimal ones.",
    false),
 
@@ -73,12 +73,36 @@ TransformAction::TransformAction():
    "Replace each ideal with the product of its generators.",
    false),
 
-_addPurePowers
-("addPurePowers",
- "Adds a pure power for each variable that does not already have a pure "
- "power\nin the ideal. Each exponent is chosen to be one larger than the"
- "maximal\nexponent of that variable that appears in the ideal.",
- false) {
+  _addPurePowers
+  ("addPurePowers",
+   "Adds a pure power for each variable that does not already have a pure "
+   "power in the ideal. Each exponent is chosen to be one larger than the "
+   "maximal exponent of that variable that appears in the ideal.",
+   false),
+
+  _trimVariables
+  ("trimVariables",
+   "Remove variables that divide none of the generators.",
+   false),
+
+  _transpose
+  ("transpose",
+   "Exchange variables and minimal generators. Let M be a matrix whose "
+   "rows are labeled by minimal generators and whose columns are labeled "
+   "by variables. The entry at row g and column x is the number of times "
+   "that x divides g. This options transposes that matrix.",
+   false),
+
+  _swap01
+  ("swap01",
+   "Change all 0 exponents to 1 and vice versa.",
+   false),
+
+  _projectVar
+  ("projectVar",
+   "Project away the i'th variable counting from 1. No action is taken "
+   "for a value of 0 or more than the number of variables in the ring.",
+   0) {
 }
 
 void TransformAction::obtainParameters(vector<Parameter*>& parameters) {
@@ -91,6 +115,10 @@ void TransformAction::obtainParameters(vector<Parameter*>& parameters) {
   parameters.push_back(&_radical);
   parameters.push_back(&_product);
   parameters.push_back(&_addPurePowers);
+  parameters.push_back(&_trimVariables);
+  parameters.push_back(&_swap01);
+  parameters.push_back(&_projectVar);
+  parameters.push_back(&_transpose);
   Action::obtainParameters(parameters);
 }
 
@@ -108,47 +136,84 @@ void TransformAction::perform() {
   facade.readIdeals(in, ideals, names);
   in.expectEOF();
 
+  IdealFacade idealFacade(_printActions);
+
+  if (_transpose) {
+    names.clear();
+    for (size_t i = 0; i < ideals.size(); ++i) {
+      const BigIdeal& ideal = *(ideals[i]);
+      BigIdeal trans(VarNames(ideal.getGeneratorCount()));
+      trans.reserve(ideal.getVarCount());
+      for (size_t var = 0; var < ideal.getVarCount(); ++var) {
+        trans.newLastTerm();
+        for (size_t gen = 0; gen < ideal.getGeneratorCount(); ++gen)
+          trans.getLastTermRef()[gen] = ideal[gen][var];
+	  }
+	  (*ideals[i]) = trans;
+      if (i == ideals.size() - 1)
+        names = ideal.getNames();
+	}
+  }
+
+  if (0 < _projectVar && _projectVar <= names.getVarCount()) {
+    size_t var = _projectVar - 1;
+    names.projectVar(var);
+
+    for (size_t i = 0; i < ideals.size(); ++i) {
+      BigIdeal& ideal = *(ideals[i]);
+      idealFacade.projectVar(ideal, var);
+    }
+  }
+
   if (_product) {
-	auto_ptr<BigIdeal> ideal;
-	ideal.reset(new BigIdeal(names));
+    auto_ptr<BigIdeal> ideal;
+    ideal.reset(new BigIdeal(names));
 
-	IdealFacade idealFacade(_printActions);
-	idealFacade.takeProducts(ideals, *ideal);
+    idealFacade.takeProducts(ideals, *ideal);
 
-	idealsDeleter.deleteElements();
-	exceptionSafePushBack(ideals, ideal);
+    idealsDeleter.deleteElements();
+    exceptionSafePushBack(ideals, ideal);
   }
 
   for (size_t i = 0; i < ideals.size(); ++i) {
-	BigIdeal& ideal = *(ideals[i]);
+    BigIdeal& ideal = *(ideals[i]);
 
-	IdealFacade idealFacade(_printActions);
+    if (_radical)
+      idealFacade.takeRadical(ideal);
 
-	if (_radical)
-	  idealFacade.takeRadical(ideal);
+	if (_swap01)
+	  idealFacade.swap01(ideal);
 
-	if (_minimize)
-	  idealFacade.sortAllAndMinimize(ideal);
+    if (_minimize)
+      idealFacade.sortAllAndMinimize(ideal);
 
-	if (_deform)
-	  idealFacade.deform(ideal);
+    if (_deform)
+      idealFacade.deform(ideal);
+  }
 
-	if (_addPurePowers)
-	  idealFacade.addPurePowers(ideal);
+  if (_trimVariables)
+	idealFacade.trimVariables(ideals, names);
 
-	if (_canonicalize)
-	  idealFacade.sortVariables(ideal);
-	if (_unique)
-	  idealFacade.sortGeneratorsUnique(ideal);
-	else if (_sort || _canonicalize)
-	  idealFacade.sortGenerators(ideal);
+  for (size_t i = 0; i < ideals.size(); ++i) {
+    BigIdeal& ideal = *(ideals[i]);
+
+    if (_addPurePowers)
+      idealFacade.addPurePowers(ideal);
+
+    if (_canonicalize)
+      idealFacade.sortVariables(ideal);
+
+    if (_unique)
+      idealFacade.sortGeneratorsUnique(ideal);
+    else if (_sort || _canonicalize)
+      idealFacade.sortGenerators(ideal);
   }
 
   if (_canonicalize) {
-	VarSorter sorter(names);
-	sorter.getOrderedNames(names);
+    VarSorter sorter(names);
+    sorter.getOrderedNames(names);
 
-	sort(ideals.begin(), ideals.end(), compareIdeals);
+    sort(ideals.begin(), ideals.end(), compareIdeals);
   }
 
   auto_ptr<IOHandler> output(_io.createOutputHandler());

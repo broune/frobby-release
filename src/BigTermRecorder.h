@@ -27,7 +27,7 @@
 class BigIdeal;
 class TermTranslator;
 
-// BigTermRecorder records all the terms it consumes into a passed-in ideal
+/** BigTermRecorder records all the terms it consumes into an ideal. */
 class BigTermRecorder : public BigTermConsumer {
 public:
   BigTermRecorder();
@@ -37,6 +37,8 @@ public:
   virtual void consume(const Term& term, const TermTranslator& translator);
   virtual void consume(const vector<mpz_class>& term);
   virtual void doneConsuming();
+
+  virtual void consume(auto_ptr<BigIdeal> ideal);
 
   // Returns true if this object currently stores no ideals.
   bool empty() const;

@@ -26,25 +26,31 @@ class TermGrader;
  for the Slice Algorithm. Specifically, it makes a decision about what
  kind of splits to perform, and how to make any choices involved in
  performing such a split.
-
- Some methods can only be called on certain kinds of strategies, which
- is a violation of Liskov's Substitution principle. This is
- unfortunate, but this design makes everything work smoothly, and I
- don't see a much cleaner design.
 */
 class SplitStrategy {
  public:
   virtual ~SplitStrategy();
 
-  /** Sets pivot to the pivot of a pivot split on slice. */
+  /** Sets pivot to the pivot of a pivot split on slice. The slice is
+   not changed mathematically, but e.g. the generators may be
+   permuted.
+
+   This method must only be called if isPivotSplit() returns true.
+  */
   virtual void getPivot(Term& pivot, Slice& slice) const = 0;
 
   /** Sets pivot to the pivot of a pivot split on slice. Some pivot
-   selection strategies make use of a grading.
+   selection strategies make use of a grading. The slice is not
+   changed mathematically, but e.g. the generators may be permuted.
+
+   This method must only be called if isPivotSplit() returns true.
   */
   virtual void getPivot(Term& pivot, Slice& slice, const TermGrader& grader) const = 0;
 
-  /** Returns the variable to perform a label split on. */
+  /** Returns the variable to perform a label split on.
+
+   This method must only be called if isLabelSplit() returns true.
+  */
   virtual size_t getLabelSplitVariable(const Slice& slice) const = 0;
 
   /** If returns true, only call getPivot. */
@@ -56,11 +62,10 @@ class SplitStrategy {
   /** Returns the name of the strategy. */
   virtual const char* getName() const = 0;
 
-  /** Returns a strategy with the given name. Returns null if no
-   strategy has that name. This is the only way to create a
-   SplitStrategy.
+  /** Returns the strategy whose name has the given prefix. This is
+   the only way to create a SplitStrategy.
   */
-  static auto_ptr<SplitStrategy> createStrategy(const string& name);
+  static auto_ptr<SplitStrategy> createStrategy(const string& prefix);
 
  protected:
   SplitStrategy();

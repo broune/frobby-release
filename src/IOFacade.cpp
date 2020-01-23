@@ -28,7 +28,11 @@
 #include "BigTermRecorder.h"
 #include "CoefBigTermConsumer.h"
 #include "CoefBigTermRecorder.h"
-
+#include "SatBinomIdeal.h"
+#include "SatBinomRecorder.h"
+#include "InputConsumer.h"
+#include "SquareFreeIdeal.h"
+#include "RawSquareFreeIdeal.h"
 #include <iterator>
 
 IOFacade::IOFacade(bool printActions):
@@ -38,11 +42,40 @@ IOFacade::IOFacade(bool printActions):
 bool IOFacade::isValidMonomialIdealFormat(const string& format) {
   beginAction("Validating monomial ideal format name.");
 
-  bool valid = (IOHandler::createIOHandler(format).get() != 0);
+  bool valid = true;
+  try {
+    createIOHandler(format).get();
+  } catch (const UnknownNameException&) {
+    valid = false;
+  }
 
   endAction();
 
   return valid;
+}
+
+void IOFacade::readSatBinomIdeal(Scanner& in, SatBinomConsumer& consumer) {
+  beginAction("Reading saturated binomial ideal.");
+
+  auto_ptr<IOHandler> handler(in.createIOHandler());
+  ASSERT(handler.get() != 0);
+
+  handler->readSatBinomIdeal(in, consumer);
+
+  endAction();
+}
+
+void IOFacade::readSatBinomIdeal(Scanner& in, SatBinomIdeal& ideal) {
+  beginAction("Reading saturated binomial ideal.");
+
+  auto_ptr<IOHandler> handler(in.createIOHandler());
+  ASSERT(handler.get() != 0);
+
+  ideal.clear();
+  SatBinomRecorder recorder(ideal);
+  handler->readSatBinomIdeal(in, recorder);
+
+  endAction();
 }
 
 void IOFacade::readIdeal(Scanner& in, BigTermConsumer& consumer) {
@@ -51,7 +84,13 @@ void IOFacade::readIdeal(Scanner& in, BigTermConsumer& consumer) {
   auto_ptr<IOHandler> handler(in.createIOHandler());
   ASSERT(handler.get() != 0);
 
-  handler->readIdeal(in, consumer);
+  InputConsumer middleman;
+  handler->readIdeal(in, middleman);
+  // todo: find a way to generate the input as it comes in rather than
+  // storing it and only then letting it go on.
+  ASSERT(!middleman.empty());
+  consumer.consume(middleman.releaseBigIdeal());
+  ASSERT(middleman.empty());
 
   endAction();
 }
@@ -62,20 +101,37 @@ void IOFacade::readIdeal(Scanner& in, BigIdeal& ideal) {
   auto_ptr<IOHandler> handler(in.createIOHandler());
   ASSERT(handler.get() != 0);
 
-  BigTermRecorder recorder;
+  InputConsumer recorder;
   handler->readIdeal(in, recorder);
 
-  // TODO: return value instead of this copy.
   ASSERT(!recorder.empty());
-  ideal = *(recorder.releaseIdeal());
+  ideal.swap(*(recorder.releaseBigIdeal()));
   ASSERT(recorder.empty());
 
   endAction();
 }
 
+/** Read a square free ideal from in and place it in the parameter
+	ideal. */
+void IOFacade::readSquareFreeIdeal(Scanner& in, SquareFreeIdeal& ideal) {
+  beginAction("Reading square free ideal.");
+
+  auto_ptr<IOHandler> handler(in.createIOHandler());
+  ASSERT(handler.get() != 0);
+
+  InputConsumer consumer;
+  consumer.requireSquareFree();
+  handler->readIdeal(in, consumer);
+  ASSERT(!consumer.empty());
+  ideal.swap(*consumer.releaseSquareFreeIdeal());
+  ASSERT(consumer.empty());
+
+  endAction();
+}
+
 void IOFacade::readIdeals(Scanner& in,
-						  vector<BigIdeal*>& ideals,
-						  VarNames& names) {
+                          vector<BigIdeal*>& ideals,
+                          VarNames& names) {
   beginAction("Reading monomial ideals.");
 
   // To make it clear what needs to be deleted in case of an exception.
@@ -84,12 +140,13 @@ void IOFacade::readIdeals(Scanner& in,
 
   auto_ptr<IOHandler> handler(in.createIOHandler());
 
-  BigTermRecorder recorder;
+  //BigTermRecorder recorder;
+  InputConsumer recorder;
   handler->readIdeals(in, recorder);
 
   names = recorder.getRing();
   while (!recorder.empty())
-	exceptionSafePushBack(ideals, recorder.releaseIdeal());
+    exceptionSafePushBack(ideals, recorder.releaseBigIdeal());
 
   idealsDeleter.release();
 
@@ -97,8 +154,8 @@ void IOFacade::readIdeals(Scanner& in,
 }
 
 void IOFacade::writeIdeal(const BigIdeal& ideal,
-						  IOHandler* handler,
-						  FILE* out) {
+                          IOHandler* handler,
+                          FILE* out) {
   ASSERT(handler != 0);
 
   beginAction("Writing monomial ideal.");
@@ -109,27 +166,27 @@ void IOFacade::writeIdeal(const BigIdeal& ideal,
 }
 
 void IOFacade::writeIdeals(const vector<BigIdeal*>& ideals,
-						   const VarNames& names,
-						   IOHandler* handler,
-						   FILE* out) {
+                           const VarNames& names,
+                           IOHandler* handler,
+                           FILE* out) {
   ASSERT(handler != 0);
 
   beginAction("Writing monomial ideals.");
 
   {
-	auto_ptr<BigTermConsumer> consumer = handler->createIdealWriter(out);
+    auto_ptr<BigTermConsumer> consumer = handler->createIdealWriter(out);
 
-	consumer->beginConsumingList();
-	consumer->consumeRing(names);
+    consumer->beginConsumingList();
+    consumer->consumeRing(names);
 
-	for (vector<BigIdeal*>::const_iterator it = ideals.begin();
-		 it != ideals.end(); ++it)
-	  consumer->consume(**it);
+    for (vector<BigIdeal*>::const_iterator it = ideals.begin();
+         it != ideals.end(); ++it)
+      consumer->consume(**it);
 
-	consumer->doneConsumingList();
+    consumer->doneConsumingList();
   }
 
-  endAction();  
+  endAction();
 }
 
 void IOFacade::readPolynomial(Scanner& in, BigPolynomial& polynomial) {
@@ -146,8 +203,8 @@ void IOFacade::readPolynomial(Scanner& in, BigPolynomial& polynomial) {
 }
 
 void IOFacade::writePolynomial(const BigPolynomial& polynomial,
-							   IOHandler* handler,
-							   FILE* out) {
+                               IOHandler* handler,
+                               FILE* out) {
   ASSERT(handler != 0);
   ASSERT(out != 0);
 
@@ -159,9 +216,9 @@ void IOFacade::writePolynomial(const BigPolynomial& polynomial,
 }
 
 void IOFacade::writeTerm(const vector<mpz_class>& term,
-						 const VarNames& names,
-						 IOHandler* handler,
-						 FILE* out) {
+                         const VarNames& names,
+                         IOHandler* handler,
+                         FILE* out) {
   beginAction("Writing monomial.");
 
   handler->writeTerm(term, names, out);
@@ -176,21 +233,21 @@ bool IOFacade::readAlexanderDualInstance
   auto_ptr<IOHandler> handler(in.createIOHandler());
   ASSERT(handler.get() != 0);
 
-  BigTermRecorder recorder;
+  InputConsumer recorder;
   handler->readIdeal(in, recorder);
 
   // TODO: return value instead of this copy.
   ASSERT(!recorder.empty());
-  ideal = *(recorder.releaseIdeal());
+  ideal = *(recorder.releaseBigIdeal());
   ASSERT(recorder.empty());
 
   bool pointSpecified = false;
   if (handler->hasMoreInput(in)) {
-	handler->readTerm(in, ideal.getNames(), term);
-	pointSpecified = true;
+    handler->readTerm(in, ideal.getNames(), term);
+    pointSpecified = true;
   }
 
-  endAction();  
+  endAction();
 
   return pointSpecified;
 }
@@ -201,7 +258,7 @@ void IOFacade::readVector
 
   v.resize(integerCount);
   for (size_t i = 0; i < integerCount; ++i)
-	in.readInteger(v[i]);
+    in.readInteger(v[i]);
 
   endAction();
 }
@@ -224,21 +281,21 @@ void IOFacade::readFrobeniusInstanceWithGrobnerBasis
 
   if (instance.size() != ideal.getVarCount() + 1) {
     if (instance.empty())
-	  reportSyntaxError
-		(in, "The Grobner basis is not followed by a Frobenius instance.");
+      reportSyntaxError
+        (in, "The Grobner basis is not followed by a Frobenius instance.");
     else {
-	  // Note that we add one since the first entry of the rows encoding
-	  // the Grobner basis is chopped off.	  
-	  FrobbyStringStream errorMsg;
-	  errorMsg << "The Grobner basis has "
-			   << ideal.getVarCount() + 1
-			   << " entries, and the Frobenius instance should then also have "
-			   << ideal.getVarCount() + 1
-			   << " entries, but in fact it has "
-			   << instance.size() 
-			   << " entries.";
-		reportSyntaxError(in, errorMsg);
-	}
+      // Note that we add one since the first entry of the rows encoding
+      // the Grobner basis is chopped off.
+      FrobbyStringStream errorMsg;
+      errorMsg << "The Grobner basis has "
+               << ideal.getVarCount() + 1
+               << " entries, and the Frobenius instance should then also have "
+               << ideal.getVarCount() + 1
+               << " entries, but in fact it has "
+               << instance.size()
+               << " entries.";
+        reportSyntaxError(in, errorMsg);
+    }
   }
 
   endAction();

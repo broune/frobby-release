@@ -23,26 +23,66 @@
 #include "TermTranslator.h"
 #include <vector>
 #include "Projection.h"
-#include "SliceAlgorithm.h"
 #include "TermGrader.h"
-#include "SliceEvent.h"
 
-auto_ptr<Slice> MsmStrategy::beginComputing(const Ideal& ideal) {
+MsmStrategy::MsmStrategy(TermConsumer* consumer,
+                         const SplitStrategy* splitStrategy):
+  SliceStrategyCommon(splitStrategy),
+  _consumer(consumer),
+  _initialSubtract(0) {
+  ASSERT(consumer != 0);
+}
+
+MsmStrategy::MsmStrategy(TermConsumer* consumer,
+                         const SplitStrategy* splitStrategy,
+                         const Ideal& initialSubtract):
+  SliceStrategyCommon(splitStrategy),
+  _consumer(consumer),
+  _initialSubtract(new Ideal(initialSubtract)) {
+  ASSERT(consumer != 0);
+}
+
+void MsmStrategy::run(const Ideal& ideal) {
+  ASSERT(_initialSubtract.get() == 0 ||
+         _initialSubtract->getVarCount() == ideal.getVarCount());
+
   _consumer->beginConsuming();
   size_t varCount = ideal.getVarCount();
+  if (_initialSubtract.get() == 0)
+    _initialSubtract = auto_ptr<Ideal>(new Ideal(varCount));
 
   Term sliceMultiply(varCount);
   for (size_t var = 0; var < varCount; ++var)
-	sliceMultiply[var] = 1;
+    sliceMultiply[var] = 1;
 
   auto_ptr<Slice> slice
-	(new MsmSlice(ideal, Ideal(varCount), sliceMultiply, _consumer));
+    (new MsmSlice(*this, ideal, *_initialSubtract, sliceMultiply, _consumer));
   simplify(*slice);
-  return slice;
+
+  _initialSubtract.reset();
+  _tasks.addTask(slice.release());
+  _tasks.runTasks();
+  _consumer->doneConsuming();
 }
 
-void MsmStrategy::doneComputing() {
-  _consumer->doneConsuming();
+bool MsmStrategy::processSlice(TaskEngine& tasks, auto_ptr<Slice> slice) {
+  ASSERT(slice.get() != 0);
+
+  if (slice->baseCase(getUseSimplification())) {
+    freeSlice(slice);
+    return true;
+  }
+
+  if (getUseIndependence() && _indep.analyze(*slice))
+    independenceSplit(slice);
+  else if (_split->isLabelSplit())
+    labelSplit(slice);
+  else {
+    ASSERT(_split->isPivotSplit());
+    pivotSplit(auto_ptr<Slice>(slice));
+  }
+
+  return false;
 }
 
 auto_ptr<MsmSlice> MsmStrategy::newMsmSlice() {
@@ -52,7 +92,7 @@ auto_ptr<MsmSlice> MsmStrategy::newMsmSlice() {
 }
 
 auto_ptr<Slice> MsmStrategy::allocateSlice() {
-  return auto_ptr<Slice>(new MsmSlice());
+  return auto_ptr<Slice>(new MsmSlice(*this));
 }
 
 bool MsmStrategy::debugIsValidSlice(Slice* slice) {
@@ -61,9 +101,12 @@ bool MsmStrategy::debugIsValidSlice(Slice* slice) {
   return true;
 }
 
-void MsmStrategy::labelSplit(auto_ptr<MsmSlice> slice,
-							 auto_ptr<Slice>& leftSlice,
-							 auto_ptr<Slice>& rightSlice) {
+void MsmStrategy::labelSplit(auto_ptr<Slice> sliceParam) {
+  ASSERT(sliceParam.get() != 0);
+  ASSERT(debugIsValidSlice(sliceParam.get()));
+  auto_ptr<MsmSlice> slice
+    (static_cast<MsmSlice*>(sliceParam.release()));
+
   ASSERT(!slice->adjustMultiply());
   ASSERT(!slice->normalize());
   ASSERT(_split != 0);
@@ -77,107 +120,102 @@ void MsmStrategy::labelSplit(auto_ptr<MsmSlice> slice,
   Ideal::const_iterator label = stop;
   bool hasTwoLabels = false;
   for (Ideal::const_iterator it = slice->getIdeal().begin();
-	   it != stop; ++it) {
+       it != stop; ++it) {
     if ((*it)[var] == 1) {
-	  term = *it;
-	  term[var] -= 1;
+      term = *it;
+      term[var] -= 1;
 
-	  bool couldBeLabel = !slice->getSubtract().contains(term);
-	  if (couldBeLabel) {
-		for (size_t v = 0; v < slice->getVarCount(); ++v) {
-		  if (term[v] == lcm[v]) {
-			couldBeLabel = false;
-			break;
-		  }
-		}
-	  }
+      bool couldBeLabel = !slice->getSubtract().contains(term);
+      if (couldBeLabel) {
+        for (size_t v = 0; v < slice->getVarCount(); ++v) {
+          if (term[v] == lcm[v]) {
+            couldBeLabel = false;
+            break;
+          }
+        }
+      }
 
-	  if (couldBeLabel) {
-		if (label == stop)
-		  label = it;
-		else {
-		  hasTwoLabels = true;
-		  break;
-		}
-	  }
-	}
+      if (couldBeLabel) {
+        if (label == stop)
+          label = it;
+        else {
+          hasTwoLabels = true;
+          break;
+        }
+      }
+    }
   }
 
   auto_ptr<Slice> hasLabelSlice;
 
   if (label != stop) {
-	term = *label;
-	term[var] -= 1;
+    term = *label;
+    term[var] -= 1;
 
-	hasLabelSlice = newSlice();
-	*hasLabelSlice = *slice;
-	hasLabelSlice->innerSlice(term);
+    hasLabelSlice = newSlice();
+    *hasLabelSlice = *slice;
+    hasLabelSlice->innerSlice(term);
 
-	if (hasTwoLabels)
-	  slice->outerSlice(term);
+    if (hasTwoLabels)
+      slice->outerSlice(term);
   }
 
   if (!hasTwoLabels) {
-	term.setToIdentity();
-	term[var] = 1;
-	slice->innerSlice(term);
+    term.setToIdentity();
+    term[var] = 1;
+    slice->innerSlice(term);
   }
 
-  leftSlice = hasLabelSlice;
-  if (leftSlice.get() != 0)
-	simplify(*leftSlice);
+  if (hasLabelSlice.get() != 0) {
+    simplify(*hasLabelSlice);
+    _tasks.addTask(hasLabelSlice.release());
+  }
 
-  rightSlice = slice;
-  simplify(*rightSlice);
+  simplify(*slice);
+  _tasks.addTask(slice.release());
 }
 
-MsmStrategy::MsmStrategy(TermConsumer* consumer,
-						 const SplitStrategy* splitStrategy):
-  SliceStrategyCommon(splitStrategy),
-  _consumer(consumer) {
-  ASSERT(consumer != 0);
-}
-
-class MsmIndependenceSplit : public TermConsumer, public SliceEvent {
+class MsmIndependenceSplit : public TermConsumer, public Task {
 public:
-  SliceEvent* getLeftEvent() {
-	return this;
+  Task* getLeftEvent() {
+    return this;
   }
 
   TermConsumer* getLeftConsumer() {
-	return this;
+    return this;
   }
 
   TermConsumer* getRightConsumer() {
-	return &_rightConsumer;
+    return &_rightConsumer;
   }
 
   const Projection& getLeftProjection() {
-	return _leftProjection;
+    return _leftProjection;
   }
 
   const Projection& getRightProjection() {
-	return _rightProjection;
+    return _rightProjection;
   }
 
   void reset(TermConsumer* consumer,
-			 IndependenceSplitter& splitter) {
-	_consumer = consumer;
-	_tmpTerm.reset(splitter.getVarCount());
+             IndependenceSplitter& splitter) {
+    _consumer = consumer;
+    _tmpTerm.reset(splitter.getVarCount());
 
-	splitter.getBigProjection(_leftProjection);
-	splitter.getRestProjection(_rightProjection);
+    splitter.getBigProjection(_leftProjection);
+    splitter.getRestProjection(_rightProjection);
 
-	_rightConsumer._decom.clearAndSetVarCount
-	  (_rightProjection.getRangeVarCount());	
+    _rightConsumer._decom.clearAndSetVarCount
+      (_rightProjection.getRangeVarCount());
   }
 
 private:
-  virtual void raiseEvent() {
+  virtual void run(TaskEngine& engine) {
+    dispose();
   }
 
   virtual void dispose() {
-	delete this;
+    delete this;
   }
 
   virtual void beginConsuming() {
@@ -187,27 +225,27 @@ private:
   }
 
   virtual void consume(const Term& term) {
-	_leftProjection.inverseProject(_tmpTerm, term);
-	Ideal::const_iterator stop = _rightConsumer._decom.end();
-	for (Ideal::const_iterator it = _rightConsumer._decom.begin();
-		 it != stop; ++it) {
-	  _rightProjection.inverseProject(_tmpTerm, *it);
-	  _consumer->consume(_tmpTerm);
-	}
+    _leftProjection.inverseProject(_tmpTerm, term);
+    Ideal::const_iterator stop = _rightConsumer._decom.end();
+    for (Ideal::const_iterator it = _rightConsumer._decom.begin();
+         it != stop; ++it) {
+      _rightProjection.inverseProject(_tmpTerm, *it);
+      _consumer->consume(_tmpTerm);
+    }
   }
 
   struct RightConsumer : public TermConsumer {
-	virtual void beginConsuming() {
-	}
+    virtual void beginConsuming() {
+    }
 
-	virtual void doneConsuming() {
-	}
+    virtual void doneConsuming() {
+    }
 
- 	virtual void consume(const Term& term) {
-	  _decom.insert(term);
-	}
+    virtual void consume(const Term& term) {
+      _decom.insert(term);
+    }
 
-	Ideal _decom;
+    Ideal _decom;
   } _rightConsumer;
 
   TermConsumer* _consumer;
@@ -218,56 +256,31 @@ private:
   Term _tmpTerm;
 };
 
-void MsmStrategy::independenceSplit
-(auto_ptr<MsmSlice> slice,
- SliceEvent*& leftEvent, auto_ptr<Slice>& leftSlice,
- SliceEvent*& rightEvent, auto_ptr<Slice>& rightSlice) {
+void MsmStrategy::independenceSplit(auto_ptr<Slice> sliceParam) {
+  ASSERT(sliceParam.get() != 0);
+  ASSERT(debugIsValidSlice(sliceParam.get()));
+  auto_ptr<MsmSlice> slice
+    (static_cast<MsmSlice*>(sliceParam.release()));
 
-  // Construct left event (assignment later).
-  auto_ptr<MsmIndependenceSplit> events(new MsmIndependenceSplit());
-  events->reset(slice->getConsumer(), _indep);
+  // Construct split object
+  auto_ptr<MsmIndependenceSplit> autoSplit(new MsmIndependenceSplit());
+  autoSplit->reset(slice->getConsumer(), _indep);
+  MsmIndependenceSplit* split = autoSplit.release();
+  _tasks.addTask(split); // Runs when we are done with all of this split.
 
   // Construct left slice.
-  auto_ptr<MsmSlice> msmLeftSlice(new MsmSlice());
-  msmLeftSlice->setToProjOf(*slice, events->getLeftProjection(), events.get());
-  leftSlice = msmLeftSlice;
+  auto_ptr<MsmSlice> leftSlice(new MsmSlice(*this));
+  leftSlice->setToProjOf(*slice, split->getLeftProjection(), split);
+  _tasks.addTask(leftSlice.release());
 
   // Construct right slice.
-  auto_ptr<MsmSlice> msmRightSlice(new MsmSlice());
-  msmRightSlice->setToProjOf(*slice, events->getRightProjection(),
-							 events->getRightConsumer());
-  rightSlice = msmRightSlice;
+  auto_ptr<MsmSlice> rightSlice(new MsmSlice(*this));
+  rightSlice->setToProjOf(*slice, split->getRightProjection(),
+                          split->getRightConsumer());
+  _tasks.addTask(rightSlice.release());
 
   // Deal with slice.
-  freeSlice(static_cast<auto_ptr<Slice> >(slice));
-
-  // Done last to avoid memory leak on exception.
-  leftEvent = events.release();
-}
-
-void MsmStrategy::split(auto_ptr<Slice> sliceParam,
-						SliceEvent*& leftEvent, auto_ptr<Slice>& leftSlice,
-						SliceEvent*& rightEvent, auto_ptr<Slice>& rightSlice) {
-  ASSERT(sliceParam.get() != 0);
-  ASSERT(dynamic_cast<MsmSlice*>(sliceParam.get()) != 0);
-  auto_ptr<MsmSlice> slice(static_cast<MsmSlice*>(sliceParam.release()));
-
-  ASSERT(leftEvent == 0);
-  ASSERT(leftSlice.get() == 0);
-  ASSERT(rightEvent == 0);
-  ASSERT(rightSlice.get() == 0);
-
-  if (getUseIndependence() && _indep.analyze(*slice)) {
-	independenceSplit(slice, leftEvent, leftSlice, rightEvent, rightSlice);
-	return;
-  }
-
-  if (_split->isLabelSplit())
-	labelSplit(slice, leftSlice, rightSlice);
-  else {
-	ASSERT(_split->isPivotSplit());
-	pivotSplit(auto_ptr<Slice>(slice), leftSlice, rightSlice);
-  }
+  freeSlice(auto_ptr<Slice>(slice));
 }
 
 void MsmStrategy::getPivot(Term& pivot, Slice& slice) {

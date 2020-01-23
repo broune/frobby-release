@@ -17,6 +17,7 @@
 #include "stdinc.h"
 #include "SliceStrategyCommon.h"
 #include "ElementDeleter.h"
+#include "TaskEngine.h"
 
 #include "Slice.h"
 
@@ -30,13 +31,9 @@ SliceStrategyCommon::SliceStrategyCommon(const SplitStrategy* splitStrategy):
 SliceStrategyCommon::~SliceStrategyCommon() {
   // TODO: use ElementDeleter instead
   while (!_sliceCache.empty()) {
-	delete _sliceCache.back();
-	_sliceCache.pop_back();
+    delete _sliceCache.back();
+    _sliceCache.pop_back();
   }
-}
-
-bool SliceStrategyCommon::processIfBaseCase(Slice& slice) {
-  return slice.baseCase(getUseSimplification());
 }
 
 void SliceStrategyCommon::freeSlice(auto_ptr<Slice> slice) {
@@ -57,10 +54,10 @@ void SliceStrategyCommon::setUseSimplification(bool use) {
 
 bool SliceStrategyCommon::simplify(Slice& slice) {
   if (getUseSimplification())
-	return slice.simplify();
+    return slice.simplify();
   else if (_split->isLabelSplit()) {
-	// The label split code requires at least this simplification.
-	return slice.adjustMultiply(); 
+    // The label split code requires at least this simplification.
+    return slice.adjustMultiply();
   }
   return false;
 }
@@ -68,51 +65,49 @@ bool SliceStrategyCommon::simplify(Slice& slice) {
 auto_ptr<Slice> SliceStrategyCommon::newSlice() {
   auto_ptr<Slice> slice;
   if (!_sliceCache.empty()) {
-	slice.reset(_sliceCache.back());
-	_sliceCache.pop_back();
+    slice.reset(_sliceCache.back());
+    _sliceCache.pop_back();
   } else
-	slice = allocateSlice();
+    slice = allocateSlice();
 
   ASSERT(debugIsValidSlice(slice.get()));
   return slice;
 }
 
-void SliceStrategyCommon::pivotSplit(auto_ptr<Slice> slice,
-									 auto_ptr<Slice>& leftSlice,
-									 auto_ptr<Slice>& rightSlice) {
+void SliceStrategyCommon::pivotSplit(auto_ptr<Slice> slice) {
   ASSERT(slice.get() != 0);
-  ASSERT(leftSlice.get() == 0);
-  ASSERT(rightSlice.get() == 0);
 
   _pivotTmp.reset(slice->getVarCount());
   getPivot(_pivotTmp, *slice);
 
   // Assert valid pivot.
   ASSERT(_pivotTmp.getVarCount() == slice->getVarCount());
-  ASSERT(!_pivotTmp.isIdentity()); 
+  ASSERT(!_pivotTmp.isIdentity());
   ASSERT(!slice->getIdeal().contains(_pivotTmp));
   ASSERT(!slice->getSubtract().contains(_pivotTmp));
 
-  // The inner slice.
-  leftSlice = newSlice();
-  *leftSlice = *slice;
-  leftSlice->innerSlice(_pivotTmp);
-  simplify(*leftSlice);
+  // Set slice2 to the inner slice.
+  auto_ptr<Slice> slice2 = newSlice();
+  *slice2 = *slice;
+  slice2->innerSlice(_pivotTmp);
+  simplify(*slice2);
 
-  // The outer slice
-  rightSlice = slice;
-  rightSlice->outerSlice(_pivotTmp);
-  simplify(*rightSlice);
+  // Set slice to the outer slice.
+  slice->outerSlice(_pivotTmp);
+  simplify(*slice);
 
-  // Process the smaller one first to preserve memory.
-  if (leftSlice->getIdeal().getGeneratorCount() <
-	  rightSlice->getIdeal().getGeneratorCount()) {
-	// swap() does not work correctly on auto_ptr, so we have to do
-	// the swap by hand.
-	auto_ptr<Slice> tmp = leftSlice;
-	leftSlice = rightSlice;
-	rightSlice = tmp;
+  // Process the smaller slice first to preserve memory.
+  if (slice2->getIdeal().getGeneratorCount() <
+      slice->getIdeal().getGeneratorCount()) {
+    // std::swap() may not work correctly on auto_ptr, so we have to
+    // do the swap by hand.
+    auto_ptr<Slice> tmp = slice2;
+    slice2 = slice;
+    slice = tmp;
   }
+
+  _tasks.addTask(slice2.release());
+  _tasks.addTask(slice.release());
 }
 
 bool SliceStrategyCommon::getUseIndependence() const {

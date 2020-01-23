@@ -1,6 +1,6 @@
 # ***** Variables
 
-rawSources = main.cpp Action.cpp IOParameters.cpp						\
+rawSources := main.cpp Action.cpp IOParameters.cpp						\
   IrreducibleDecomAction.cpp fplllIO.cpp IOHandler.cpp fourti2.cpp		\
   randomDataGenerators.cpp MonosIOHandler.cpp BigIdeal.cpp				\
   TransformAction.cpp Macaulay2IOHandler.cpp NewMonosIOHandler.cpp		\
@@ -12,7 +12,7 @@ rawSources = main.cpp Action.cpp IOParameters.cpp						\
   Parameter.cpp ParameterGroup.cpp IntegerParameter.cpp					\
   SliceParameters.cpp BoolParameter.cpp Scanner.cpp Partition.cpp		\
   StringParameter.cpp Term.cpp TermTranslator.cpp Timer.cpp				\
-  VarNames.cpp LatticeFormatAction.cpp SliceAlgorithm.cpp Ideal.cpp		\
+  VarNames.cpp LatticeFormatAction.cpp Ideal.cpp						\
   IntersectionAction.cpp IntersectFacade.cpp							\
   AssociatedPrimesAction.cpp MsmSlice.cpp IndependenceSplitter.cpp		\
   Projection.cpp MsmStrategy.cpp lattice.cpp LatticeFacade.cpp			\
@@ -25,36 +25,42 @@ rawSources = main.cpp Action.cpp IOParameters.cpp						\
   BigTermRecorder.cpp CoCoA4IOHandler.cpp SingularIOHandler.cpp			\
   TotalDegreeCoefTermConsumer.cpp BigPolynomial.cpp						\
   CoefBigTermRecorder.cpp PolyTransformAction.cpp VarSorter.cpp			\
-  SliceEvent.cpp TermConsumer.cpp NullTermConsumer.cpp					\
-  CoefTermConsumer.cpp NullCoefTermConsumer.cpp							\
-  TranslatingCoefTermConsumer.cpp PolynomialFacade.cpp					\
-  HilbertBasecase.cpp HilbertIndependenceConsumer.cpp					\
-  SplitStrategy.cpp CanonicalTermConsumer.cpp StatisticsStrategy.cpp	\
-  TestAction.cpp NameFactory.cpp error.cpp DebugAllocator.cpp			\
-  FrobbyStringStream.cpp SliceStrategy.cpp PrimaryDecomAction.cpp		\
-  IdealComparator.cpp IOHandlerCommon.cpp IrreducibleIdealSplitter.cpp	\
-  DataType.cpp IdealConsolidator.cpp CoefBigTermConsumer.cpp			\
-  PolynomialConsolidator.cpp OptimizeAction.cpp							\
-  MaximalStandardAction.cpp test/Test.cpp test/TestCase.cpp				\
-  test/TestQualifier.cpp test/TestRunner.cpp test/TestSuite.cpp			\
-  test/TestVisitor.cpp test/macroes.cpp test/asserts.cpp				\
-  LibAlexanderDualTest.cpp LibHilbertPoincareTest.cpp					\
-  LibIrreducibleDecomTest.cpp IdealFactory.cpp PolynomialFactory.cpp	\
-  LibMaxStdTest.cpp LibStdProgramTest.cpp LibTest.cpp					\
-  OptimizeStrategyTest.cpp TermTest.cpp TermTranslatorTest.cpp			\
-  TermGraderTest.cpp CountingIOHandler.cpp test/TestSorter.cpp			\
-  DimensionAction.cpp LibDimensionTest.cpp SizeMaxIndepSetAlg.cpp
+  TermConsumer.cpp NullTermConsumer.cpp CoefTermConsumer.cpp			\
+  NullCoefTermConsumer.cpp TranslatingCoefTermConsumer.cpp				\
+  PolynomialFacade.cpp HilbertBasecase.cpp								\
+  HilbertIndependenceConsumer.cpp SplitStrategy.cpp						\
+  CanonicalTermConsumer.cpp StatisticsStrategy.cpp TestAction.cpp		\
+  NameFactory.cpp error.cpp DebugAllocator.cpp FrobbyStringStream.cpp	\
+  SliceStrategy.cpp PrimaryDecomAction.cpp IdealComparator.cpp			\
+  IrreducibleIdealSplitter.cpp DataType.cpp IdealConsolidator.cpp		\
+  CoefBigTermConsumer.cpp PolynomialConsolidator.cpp					\
+  OptimizeAction.cpp MaximalStandardAction.cpp test/Test.cpp			\
+  test/TestCase.cpp test/TestQualifier.cpp test/TestRunner.cpp			\
+  test/TestSuite.cpp test/TestVisitor.cpp test/macroes.cpp				\
+  test/asserts.cpp IdealFactory.cpp PolynomialFactory.cpp				\
+  LatticeAnalyzeAction.cpp SatBinomIdeal.cpp SatBinomConsumer.cpp		\
+  SatBinomRecorder.cpp CountingIOHandler.cpp test/TestSorter.cpp		\
+  DimensionAction.cpp SizeMaxIndepSetAlg.cpp TaskEngine.cpp Task.cpp	\
+  BigattiHilbertAlgorithm.cpp BigattiState.cpp ObjectCache.cpp			\
+  HashPolynomial.cpp BigattiBaseCase.cpp BigattiPivotStrategy.cpp		\
+  BigattiFacade.cpp UniHashPolynomial.cpp CommonParams.cpp				\
+  CliParams.cpp SliceParams.cpp SliceLikeParams.cpp BigattiParams.cpp	\
+  IOHandlerImpl.cpp IdealWriter.cpp PolyWriter.cpp IOHandlerCommon.cpp	\
+  CommonParamsHelper.cpp ActionPrinter.cpp ScarfHilbertAlgorithm.cpp	\
+  ScarfFacade.cpp Deformer.cpp IdealTree.cpp TermPredicate.cpp			\
+  ScarfParams.cpp IdealOrderer.cpp TermExtra.cpp display.cpp			\
+  Matrix.cpp BigIntVector.cpp ColumnPrinter.cpp EulerAction.cpp			\
+  RawSquareFreeTerm.cpp RawSquareFreeIdeal.cpp PivotEulerAlg.cpp		\
+  EulerState.cpp PivotStrategy.cpp Arena.cpp LocalArray.cpp				\
+  LatticeAlgs.cpp InputConsumer.cpp SquareFreeIdeal.cpp
 
-# This is for Mac 10.5. On other platforms this does not hurt, though
-# it would be nicer to not do it then. The same thing is true of
-# -L/sw/lib for ldflags.
-ifndef GMP_INC_DIR
-  GMP_INC_DIR="/sw/include"
-endif
-
-ifndef ldflags
-  ldflags = $(LDFLAGS) -lgmpxx -lgmp -L/sw/lib
-endif
+rawTests := LibAlexanderDualTest.cpp LibHilbertPoincareTest.cpp			\
+  LibIrreducibleDecomTest.cpp LibMaxStdTest.cpp LibStdProgramTest.cpp	\
+  LibTest.cpp OptimizeStrategyTest.cpp TermTest.cpp						\
+  TermTranslatorTest.cpp RawSquareFreeTermTest.cpp						\
+  RawSquareFreeIdealTest.cpp LibPrimaryDecomTest.cpp					\
+  LibAssociatedPrimesTest.cpp MatrixTest.cpp IdealTest.cpp				\
+  LibDimensionTest.cpp TermGraderTest.cpp ArenaTest.cpp
 
 ifndef CXX
   CXX      = "g++"
@@ -74,6 +80,10 @@ ifndef MODE
  MODE=release
 endif
 
+ifndef ldflags
+  ldflags = $(cflags) $(LDFLAGS) -lgmpxx -lgmp
+endif
+
 MATCH=false
 ifeq ($(MODE), release)
   outdir = bin/release/
@@ -81,6 +91,7 @@ ifeq ($(MODE), release)
   MATCH=true
 endif
 ifeq ($(MODE), debug)
+  rawSources := $(rawSources) $(rawTests)
   outdir = bin/debug/
   cflags += -g -D DEBUG -fno-inline -Werror -Wextra -Wno-uninitialized \
             -Wno-unused-parameter
@@ -100,6 +111,7 @@ ifeq ($(MODE), profile)
   benchArgs = _profile $(FROBBYARGS)
 endif
 ifeq ($(MODE), analysis)
+  rawSources := $(rawSources) $(rawTests)
   outdir = bin/analysis/
   cflags += -Wextra -fsyntax-only -O1 -Wfloat-equal -Wundef				\
   -Wno-endif-labels -Wshadow -Wlarger-than-1000 -Wpointer-arith			\
@@ -121,7 +133,7 @@ objs    = $(patsubst %.cpp, $(outdir)%.o, $(rawSources))
 
 # ***** Compilation
 
-.PHONY: all depend clean bin/$(program) test library distribution clear
+.PHONY: all depend clean bin/$(program) test library distribution clear fixspace
 
 all: bin/$(program) $(outdir)$(program)
 
@@ -147,7 +159,7 @@ test: all
 # Run all tests that it makes sense to run.
 fullTest: all
 	test/runTests _full
-	test/runSplitTests _few
+	test/runSplitTests _full
 
 # Good for testing Frobby after a small change.
 microTest: all
@@ -171,10 +183,12 @@ benchOptimize: all
 benchAlexdual: all
 	cd test/bench; ./run_alexdual_bench $(benchArgs)
 
+bin/:
+	mkdir bin/;
+
 # Make symbolic link to program from bin/
-bin/$(program): $(outdir)$(program)
+bin/$(program): $(outdir)$(program) bin/
 ifneq ($(MODE), analysis)
-	@mkdir -p $(dir $@);
 	cd bin; rm -f $(program); ln -s ../$(outdir)$(program) $(program); cd ..
 endif
 
@@ -241,30 +255,32 @@ doc: docPs docPdf
 docPs:
 	rm -rf bin/doc
 	mkdir bin/doc
-	for i in 1 2 3; do latex doc/manual.tex -output-directory=bin/doc/; done
+	for i in 1 2 3; do latex -output-directory=bin/doc/ doc/manual.tex; done
 	cd bin; dvips doc/manual.dvi
 docPdf:
 	rm -rf bin/doc
 	mkdir bin/doc
-	for i in 1 2 3; do pdflatex doc/manual.tex -output-directory=bin/doc/; done
+	for i in 1 2 3; do pdflatex -output-directory=bin/doc/ doc/manual.tex; done
 	mv bin/doc/manual.pdf bin
 docDviOnce: # Useful to view changes when writing the manual
-	latex doc/manual.tex -output-directory=bin/doc
+	latex -output-directory=bin/doc doc/manual.tex
 
 # It may seem wasteful to run doxygen three times to generate three
 # kinds of output. However, the latex output for creating a pdf file
 # and for creating a PostScript file is different, and so at least two
 # runs are necessary. Making the HTML output a third run is cleaner
 # than tacking it onto one or both of the other two targets.
+bin/develDoc/: bin/
+	mkdir bin/develDoc
 develDoc: develDocHtml develDocPdf develDocPs
-develDocHtml:
+develDocHtml: bin/develDoc/
 	cat doc/doxygen.conf doc/doxHtml|doxygen -
-develDocPdf:
+develDocPdf: bin/develDoc/
 	rm -rf bin/develDoc/latexPdf bin/develDoc/warningLog
 	cat doc/doxygen.conf doc/doxPdf|doxygen -
 	cd bin/develDoc/latexPdf; for f in `ls *.eps`; do epstopdf $$f; done # Cygwin fix
 	cd bin/develDoc/latexPdf/; make refman.pdf; mv refman.pdf ../develDoc.pdf
-develDocPs:
+develDocPs: bin/develDoc/
 	rm -rf bin/develDoc/latexPs bin/develDoc/warningLog
 	cat doc/doxygen.conf doc/doxPs|doxygen -
 	cd bin/develDoc/latexPs/; make refman.ps; mv refman.ps ../develDoc.ps
@@ -277,10 +293,9 @@ clean: tidy
 tidy:
 	find .|grep -x ".*~\|.*/\#.*\#|.*\.stackdump\|gmon\.out\|.*\.orig\|.*/core\|core"|xargs rm -f
 
-# Convert any Windows-style whitespace into Unix-style whitespace. This is
-# a good thing to do before a commit if developing on e.g. Cygwin.
-dos2unix:
-	for f in `find src/ test/ scr/ doc/ -type f`; do dos2unix $$f; done
+# Fixes various white space related issues.
+fixspace:
+	find src/ doc/ -type f|xargs ./fixspace;
 
 commit: test
 	echo
@@ -291,10 +306,8 @@ commit: test
 remoteUrl = ssh://daimi/projs/frobby
 pull:
 	hg pull $(remoteUrl)
-	cd sage; hg pull $(remoteUrl)/sage
 push:
 	hg push $(remoteUrl)
-	cd sage; hg push $(remoteUrl)/sage
 
 distribution:
 ifndef VER
@@ -303,7 +316,7 @@ ifndef VER
 endif
 	rm -fr frobby_v$(VER).tar.gz frobby_v$(VER)
 	mkdir frobby_v$(VER)
-	cp -r frobgrob COPYING Makefile src test doc frobby_v$(VER)
+	cp -r changelog.txt frobgrob COPYING Makefile src test doc frobby_v$(VER)
 	mkdir frobby_v$(VER)/4ti2
 	tar --create --gzip --file=frobby_v$(VER).tar.gz frobby_v$(VER)/
 	rm -fr frobby_v$(VER)	

@@ -1,5 +1,6 @@
 /* Frobby: Software for monomial ideal computations.
-   Copyright (C) 2007 Bjarke Hammersholt Roune (www.broune.com)
+   Copyright (C) 2009 University of Aarhus
+   Contact Bjarke Hammersholt Roune for license information (www.broune.com)
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,40 +18,73 @@
 #include "stdinc.h"
 #include "IOHandlerCommon.h"
 
-#include "Scanner.h"
-#include "BigIdeal.h"
+#include "VarNames.h"
+#include "BigTermConsumer.h"
 #include "BigTermRecorder.h"
+#include "error.h"
+#include "InputConsumer.h"
 
-IOHandlerCommon::IOHandlerCommon(const char* formatName,
-								 const char* formatDescription):
-  IOHandler(formatName, formatDescription, false) {
+IO::IOHandlerCommon::IOHandlerCommon(const char* formatName,
+                                     const char* formatDescription):
+  IOHandlerImpl(formatName, formatDescription) {
 }
 
-void IOHandlerCommon::readIdeal(Scanner& in, BigTermConsumer& consumer) {
-  VarNames names;
-  readRing(in, names);
-  readBareIdeal(in, names, consumer);
+void IO::IOHandlerCommon::readRing(Scanner& in, VarNames& names) {
+  doReadRing(in, names);
 }
 
-void IOHandlerCommon::readIdeals(Scanner& in, BigTermConsumer& consumer) {
+bool IO::IOHandlerCommon::peekRing(Scanner& in) {
+  return doPeekRing(in);
+}
+
+void IO::IOHandlerCommon::readBareIdeal(Scanner& in, InputConsumer& consumer) {
+  doReadBareIdeal(in, consumer);
+}
+
+void IO::IOHandlerCommon::readBarePolynomial(Scanner& in,
+                                            const VarNames& names,
+                                            CoefBigTermConsumer& consumer) {
+  doReadBarePolynomial(in, names, consumer);
+}
+
+void IO::IOHandlerCommon::doReadIdeal(Scanner& in, InputConsumer& consumer) {
   VarNames names;
   readRing(in, names);
-  if (!hasMoreInput(in)) {
-	consumer.consumeRing(names);
-	return;
-  }
-  readBareIdeal(in, names, consumer);
+  consumer.consumeRing(names);
+  readBareIdeal(in, consumer);
+}
+
+void IO::IOHandlerCommon::doReadIdeals(Scanner& in, InputConsumer& consumer) {
+  VarNames names;
+  readRing(in, names);
+  consumer.consumeRing(names);
+  if (!hasMoreInput(in))
+    return;
+  readBareIdeal(in, consumer);
 
   while (hasMoreInput(in)) {
-	if (peekRing(in))
-	  readRing(in, names);
-	readBareIdeal(in, names, consumer);
+    if (peekRing(in)) {
+      readRing(in, names);
+	  consumer.consumeRing(names);
+	}
+    readBareIdeal(in, consumer);
   }
 }
 
-void IOHandlerCommon::readPolynomial
-(Scanner& in, CoefBigTermConsumer& consumer) {
+void IO::IOHandlerCommon::doReadPolynomial(Scanner& in,
+                                          CoefBigTermConsumer& consumer) {
   VarNames names;
   readRing(in, names);
   readBarePolynomial(in, names, consumer);
+}
+
+void IO::IOHandlerCommon::doReadBarePolynomial(Scanner& in,
+                                              const VarNames& names,
+                                              CoefBigTermConsumer& consumer) {
+  INTERNAL_ERROR_UNIMPLEMENTED();
+}
+
+void IO::IOHandlerCommon::doReadBareIdeal
+(Scanner& in, InputConsumer& consumer) {
+  INTERNAL_ERROR_UNIMPLEMENTED();
 }

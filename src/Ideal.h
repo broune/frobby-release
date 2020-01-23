@@ -23,6 +23,7 @@ class Term;
 #include <algorithm>
 #include <ostream>
 
+/// Represents a monomial ideal with int exponents.
 class Ideal {
   typedef vector<Exponent*> Cont;
 
@@ -41,14 +42,16 @@ class Ideal {
 
   typedef Cont::const_iterator const_iterator;
   typedef Cont::iterator iterator;
+  typedef Cont::const_reverse_iterator const_reverse_iterator;
+  typedef Cont::reverse_iterator reverse_iterator;
 
   const_iterator begin() const {return _terms.begin();}
   const_iterator end() const {return _terms.end();}
-  Exponent* operator[](size_t index) {return _terms[index];}
+  const Exponent* operator[](size_t index) const {return _terms[index];}
 
   iterator begin() {return _terms.begin();}
   iterator end() {return _terms.end();}
-  const Exponent* operator[](size_t index) const {return _terms[index];}  
+  Exponent*& operator[](size_t index) {return _terms[index];}
 
   size_t getVarCount() const {return _varCount;}
   size_t getGeneratorCount() const {return _terms.size();}
@@ -85,20 +88,112 @@ class Ideal {
   // the generators.
   bool isStronglyGeneric();
 
+  // Returns true if for every pair of distinct generators a and b
+  // with a[i]=b[i]>0 there is some third generator that strictly
+  // divides lcm(a,b). This only corresponds to the mathematical
+  // definition of weak genericity if the ideal is minimally
+  // generated.
+  bool isWeaklyGeneric() const;
+
+  /** Returns true if all pairs of generators have disjoint support.
+   I.e. if each var divides at most one generator.
+  */
+  bool disjointSupport() const;
+
+  /** Sets lcm to the least common multiple of all generators. If
+   there are no generators then we define the lcm as the identity. */
   void getLcm(Exponent* lcm) const;
+
+  /** Sets gcd to the greatest common divisor of all generators. If
+   there are no generators then we define the gcd as the identity. */
   void getGcd(Exponent* gcd) const;
+
+  /** Sets gcd to the greatest common divisor of those generators that
+   raise the variable var to the power exp. If there are no such
+   generators then we define the gcd as the identity.
+  */
+  void getGcdAtExponent(Exponent* gcd, size_t var, Exponent exp);
+
+  /** Sets gcd to the greatest common divisor of those generators that
+   are divisible by divisor. If there are no such generators then we
+   define the gcd as the identity.
+   */
+  void getGcdOfMultiplesOf(Exponent* gcd, const Exponent* divisor);
 
   // least[var] will be the smallest non-zero exponent of var that
   // appears among the generators.
   void getLeastExponents(Exponent* least) const;
 
-  // counts[var] will be the number of generators divisible by var.
+  /** counts[var] will be the number of generators divisible by var.
+   @todo Make counts a vector<size_t>.
+   */
   void getSupportCounts(Exponent* counts) const;
+
+  /** Sets var and exp such that var^exp is the typical non-zero
+   exponent. The typical exponent is the exponent of a specific
+   variable that occurs most often among the generators. In case of
+   ties some deterministic choice is made. If there are no non-zero
+   generators then var=exp=0 is chosen and the return value is
+   zero. The returned value is the number of times the typical
+   non-zero exponent occurs.
+
+   This method is not const since it may re-arrange the generators for
+   efficiency.
+  */
+  size_t getTypicalExponent(size_t& var, Exponent& exp);
+
+  /** Sets var and exp such that var^exp is the most non-generic
+   degree. A unordered pair of generators a and b is non-generic if a
+   and b raise some var to the same non-zero exponent and lcm(a,b) is
+   not strictly divisible by any generator. The most non-generic
+   degree is the exponent that occurs most often as the shared degree
+   for non-generic pairs. In case of ties some deterministic choice is
+   made.
+
+   The return value is the number of non-generic pairs that concern
+   the most non-generic degree. If there are no non-generic pairs
+   (i.e. the ideal is generic) then the return value is zero and
+   var=exp=0.
+
+   This method is not const since it may re-arrange the generators for
+   efficiency.
+  */
+  size_t getMostNonGenericExponent(size_t& var, Exponent& exp);
+
+  /** Sets var and exp such that var^exp is the typical non-generic
+   degree. A unordered pair of generators a and b is non-generic if a
+   and b raise some var to the same non-zero exponent and lcm(a,b) is
+   not strictly divisible by any generator. A degree var^exp is
+   non-generic if it occurs as the shared degree for some non-generic
+   pair. The typical non-generic degree is the non-generic degree that
+   occurs most often among all generators. So it does not matter how
+   non-generic the degree is, just that it is non-generic at all.
+
+   The return value is the number of generators that raise var to
+   exp. If there are no non-generic pairs (i.e. the ideal is generic)
+   then the return value is zero and var=exp=0.
+
+   This method is not const since it may re-arrange the generators for
+   efficiency.
+  */
+  size_t getTypicalNonGenericExponent(size_t& var, Exponent& exp);
+
+  /** Sets var and exp such that var^exp is some non-generic
+   degree. Returns true if there are any non-generic degrees and
+   otherwise returns false.
+
+   This method is not const since it may re-arrange the generators for
+   efficiency.
+  */
+  bool getNonGenericExponent(size_t& var, Exponent& exp);
 
   // returns the first generator that var divides or end() if no such
   // generator exists.
   const_iterator getMultiple(size_t var) const;
 
+  /** Rereturns true if *this equals ideal. This comparison takes
+   non-minimal generators and the order of the generators into
+   account. */
   bool operator==(const Ideal& ideal) const;
 
   void print(FILE* file) const;
@@ -109,9 +204,11 @@ class Ideal {
   // Insert generators into the ideal.
   void insert(const Exponent* term);
   void insert(const Ideal& ideal);
+  void insert(size_t var, Exponent e);
 
   // This is equivalent to calling insert and then minimize.
   void insertReminimize(const Exponent* term);
+  void insertReminimize(size_t var, Exponent e);
 
   // Remove non-redundant generators.
   void minimize();
@@ -162,14 +259,14 @@ class Ideal {
   void clearAndSetVarCount(size_t varCount);
 
   /** Replaces the exponents from zeroExponents with zero and does not
-	  remove any non-minimal generators this may produce. If a
-	  generator raises var to precisely the power t, and zeroExponents
-	  also raises var to precisely the power t, then that generator is
-	  changed to instead raise var to the power zero. */
+      remove any non-minimal generators this may produce. If a
+      generator raises var to precisely the power t, and zeroExponents
+      also raises var to precisely the power t, then that generator is
+      changed to instead raise var to the power zero. */
   void mapExponentsToZeroNoMinimize(const Term& zeroExponents);
 
   /** Replaces all generators with their support and does not remove
-	  any non-minimal generators this may produce.
+      any non-minimal generators this may produce.
   */
   void takeRadicalNoMinimize();
 
@@ -177,14 +274,16 @@ class Ideal {
 
   void swap(Ideal& ideal);
 
-  // Removes those generators m such that pred(m) evaluates to
-  // true. Returns true if any generators were removed.
+  /** Removes those generators m such that pred(m) evaluates to
+   true. Returns true if any generators were removed.
+  */
   template<class Predicate>
     bool removeIf(Predicate pred);
 
-  // Ideal caches memory allocated with new internally and reuses it
-  // to avoid calling new all the time. Call this method to release
-  // the cache.
+  /** Ideal caches memory allocated with new internally and reuses it
+   to avoid calling new all the time. Call this method to release
+   the cache.
+  */
   static void clearStaticCache();
 
  protected:

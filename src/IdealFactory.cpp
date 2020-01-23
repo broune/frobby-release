@@ -17,6 +17,8 @@
 #include "stdinc.h"
 #include "IdealFactory.h"
 
+#include <algorithm>
+
 VarNames IdealFactory::ring_xyzt() {
   VarNames names;
   names.addVar("x");
@@ -40,6 +42,15 @@ BigIdeal IdealFactory::x_y() {
   BigIdeal ideal(ring_xyzt());
   ideal.insert(makeTerm(1, 0, 0, 0));
   ideal.insert(makeTerm(0, 1, 0, 0));
+  ideal.sortGenerators();
+  return ideal;
+}
+
+BigIdeal IdealFactory::x_y_z() {
+  BigIdeal ideal(ring_xyzt());
+  ideal.insert(makeTerm(1, 0, 0, 0));
+  ideal.insert(makeTerm(0, 1, 0, 0));
+  ideal.insert(makeTerm(0, 0, 1, 0));
   ideal.sortGenerators();
   return ideal;
 }
@@ -127,6 +138,14 @@ vector<BigIdeal> IdealFactory::irrdecom_xx_yy_xz_yz() {
   return ideals;
 }
 
+vector<BigIdeal> IdealFactory::assoprimes_xx_yy_xz_yz() {
+  vector<BigIdeal> ideals;
+  ideals.push_back(x_y());
+  ideals.push_back(x_y_z());
+  sort(ideals.begin(), ideals.end());
+  return ideals;
+}
+
 BigIdeal IdealFactory::wholeRing(size_t varCount) {
   BigIdeal ideal((VarNames(varCount)));
   ideal.insert(vector<mpz_class>(varCount));
@@ -134,7 +153,7 @@ BigIdeal IdealFactory::wholeRing(size_t varCount) {
 }
 
 BigIdeal IdealFactory::zeroIdeal(size_t varCount) {
-  return BigIdeal(VarNames(varCount));  
+  return BigIdeal(VarNames(varCount));
 }
 
 vector<mpz_class> IdealFactory::makeTerm(int a, int b, int c, int d) {

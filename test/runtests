@@ -9,10 +9,11 @@ fi
 
 TIMEFORMAT=$' (%2lR real)'
 
-normalTests="dimension irrdecom hilbert primdecom intersect assoprimes \
-             minimize alexdual radical frob maxstandard optimize"
+normalTests="euler alexdual hilbert_deform hilbert_bigatti hilbert_slice \
+             dimension primdecom intersect assoprimes minimize \
+             irrdecom radical frob maxstandard optimize"
 
-specialTests="error idealFormats polyFormats latticeFormats internal"
+specialTests="internal idealFormats polyFormats latticeFormats messages"
 params="$*"
 
 runNormalTests () {
@@ -39,6 +40,10 @@ for t in $normalTests; do
 
   runNormalTests $t frob
 
+  if [ "$t" == "euler" ]; then
+    runNormalTests $t bigIdeals
+  fi
+
   if [ -e "$t" ]; then
     runNormalTests $t $t
   fi
@@ -56,4 +61,4 @@ do
   cd ../..
 done
 
-echo "All tests passed."
+echo "All normal tests passed."

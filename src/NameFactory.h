@@ -17,107 +17,100 @@
 #ifndef NAME_FACTORY_GUARD
 #define NAME_FACTORY_GUARD
 
-// A NameFactory takes a name and then creates an instance of a class
-// that has been previously registered under that name. This is done
-// in a general way using templates.
-//
-// There are also some utility functions concerned with finding names
-// from a prefix of that name.
-
+#include "error.h"
 #include <vector>
 #include <string>
+#include <algorithm>
 
+/** A NameFactory takes a name and then creates an instance of a class
+ that has been previously registered under that name. This is done
+ in a general way using templates.
+
+ None of this is very efficient. However, the interface can be
+ implemented much more efficiently if that becomes necessary.
+*/
 template<class AbstractProduct>
 class NameFactory {
  public:
-  // Returns null if name has not been registered. Otherwse calls the
-  // function registered to that name and returns the result.
-  auto_ptr<AbstractProduct> create(const string& name);
+  /** @param abstractName The name for those things that are being
+   generated in general. Used for error messages. */
+  NameFactory(const char* abstractName): _abstractName(abstractName) {}
 
   typedef auto_ptr<AbstractProduct> (*FactoryFunction)();
   void registerProduct(const string& name, FactoryFunction function);
 
-  // Returns null if no name is uniquely determined by the
-  // prefix. Otherwse calls the function registered to that name and
-  // returns the result.
-  auto_ptr<AbstractProduct> createWithPrefix(const string& prefix);
-  void addNamesWithPrefix(const string& prefix,
-						  vector<string>& names);
-  size_t countNamesWithPrefix(const string& prefix) const;
+  /** Calls the function registered to the parameter name and returns
+   the result. Returns null if name has not been registered. Can still
+   throw an exception for example if out of memory. */
+  auto_ptr<AbstractProduct> createNoThrow(const string& name) const;
 
-  bool isEmpty() const;
+  /** Calls the function registered to the parameter name and returns
+   the result. Throws an exception if name has not been registered. */
+  auto_ptr<AbstractProduct> create(const string& name) const;
+
+  /** Inserts into names all registered names that have the indicated
+   prefix in lexicographic increasing order. */
+  void getNamesWithPrefix(const string& prefix, vector<string>& names) const;
+
+  /** Returns true if no names have been registered. */
+  bool empty() const;
+
+  string getAbstractProductName() const;
 
  private:
-  class Pair {
-  public:
-	Pair(const string& name, FactoryFunction function):
-	  _name(name),
-	  _function(function) {
-	  ASSERT(function != 0);
-	}
-
-	const string& getName() const {
-	  return _name;
-	}
-
-	bool hasPrefix(const string& prefix) const {
-	  return _name.compare(0, prefix.size(), prefix) == 0;
-	}
-
-	auto_ptr<AbstractProduct> create() const {
-	  ASSERT(_function != 0);
-	  return _function();
-	}
-
-  private:
-	string _name;
-	FactoryFunction _function;
-  };
-
+  typedef pair<string, FactoryFunction> Pair;
+  typedef typename vector<Pair>::const_iterator const_iterator;
   vector<Pair> _pairs;
+  const string _abstractName;
 };
 
-// This is a utility function wrapping the registerProduct method of a
-// NameFactory. It would make more sense as a member function, but
-// some compilers have problems with template member functions.
-//
-// The ConcreteProduct class must have a static method staticGetName
-// which returns a std::string or a const char*.
+/** Registers the string returned by ConcreteProduct::getStaticName()
+ to a function that default-constructs a ConcreteProduct. */
 template<class ConcreteProduct, class AbstractProduct>
 void nameFactoryRegister(NameFactory<AbstractProduct>& factory);
 
+/** Creates the unique product that has the indicated prefix, or
+ create the actual product that has name equal to the indicated
+ prefix. Exceptions thrown are as for getUniqueNamesWithPrefix(). */
+template<class AbstractProduct>
+auto_ptr<AbstractProduct> createWithPrefix
+(const NameFactory<AbstractProduct>& factory, const string& prefix);
+
+/** Returns the unique product name that has the indicated prefix, or
+ return prefix itself if it is the actual name of a product.
+
+ @exception UnknownNameException If no product has the indicated
+ prefix.
+
+ @exception AmbiguousNameException If more than one product has the
+ indicated prefix and the prefix is not the actual name of any
+ product. */
+template<class AbstractProduct>
+string getUniqueNameWithPrefix
+(const NameFactory<AbstractProduct>& factory, const string& prefix);
 
 
-// These are implementations that have to be included here due to
-// being templates.
+// **************************************************************
+// These are implementations that have to be included here due
+// to being templates.
 
 template<class AbstractProduct>
 auto_ptr<AbstractProduct> NameFactory<AbstractProduct>::
-create(const string& name) {
-  for (typename vector<Pair>::const_iterator it = _pairs.begin();
-	   it != _pairs.end(); ++it)
-	if (it->getName() == name)
-	  return it->create();
+createNoThrow(const string& name) const {
+  for (const_iterator it = _pairs.begin(); it != _pairs.end(); ++it)
+    if (it->first == name)
+      return it->second();
   return auto_ptr<AbstractProduct>();
 }
 
 template<class AbstractProduct>
 auto_ptr<AbstractProduct> NameFactory<AbstractProduct>::
-createWithPrefix(const string& prefix) {
-  typename vector<Pair>::const_iterator match = _pairs.end();
-  for (typename vector<Pair>::const_iterator it = _pairs.begin();
-	   it != _pairs.end(); ++it) {
-	if (it->hasPrefix(prefix)) {
-	  if (match != _pairs.end())
-		return auto_ptr<AbstractProduct>(); // not unique
-	  match = it; // first match
-	}
-  }
-
-  if (match == _pairs.end())
-	return auto_ptr<AbstractProduct>();
-  else
-	return match->create();
+create(const string& name) const {
+  auto_ptr<AbstractProduct> product = createNoThrow(name);
+  if (product.get() == 0)
+    throwError<UnknownNameException>(
+      "Unknown " + getAbstractProductName() + " \"" + name + "\".");
+  return product;
 }
 
 template<class AbstractProduct>
@@ -128,46 +121,67 @@ registerProduct(const string& name, FactoryFunction function) {
 
 template<class AbstractProduct>
 void NameFactory<AbstractProduct>::
-addNamesWithPrefix(const string& prefix, vector<string>& names) {
-  for (typename vector<Pair>::const_iterator it = _pairs.begin();
-	   it != _pairs.end(); ++it)
-	if (it->hasPrefix(prefix))
-	  names.push_back(it->getName());
+getNamesWithPrefix(const string& prefix, vector<string>& names) const {
+  for (const_iterator it = _pairs.begin(); it != _pairs.end(); ++it)
+    if (it->first.compare(0, prefix.size(), prefix) == 0)
+      names.push_back(it->first);
+  sort(names.begin(), names.end());
 }
 
 template<class AbstractProduct>
-size_t NameFactory<AbstractProduct>::
-countNamesWithPrefix(const string& prefix) const {
-  size_t count = 0;
-  for (typename vector<Pair>::const_iterator it = _pairs.begin();
-	   it != _pairs.end(); ++it)
-	if (it->hasPrefix(prefix))
-	  ++count;
-  return count;
-}
-
-template<class AbstractProduct>
-bool NameFactory<AbstractProduct>::isEmpty() const {
+bool NameFactory<AbstractProduct>::empty() const {
   return _pairs.empty();
 }
 
-namespace {
-  // Helper function for nameFactoryRegister.
-  template<class AbstractProduct, class ConcreteProduct>
-  auto_ptr<AbstractProduct> createConcreteProductHelper() {
-	return auto_ptr<AbstractProduct>(new ConcreteProduct());
-  }
+template<class AbstractProduct>
+string NameFactory<AbstractProduct>::getAbstractProductName() const {
+  return _abstractName;
 }
 
 template<class ConcreteProduct, class AbstractProduct>
-  void nameFactoryRegister(NameFactory<AbstractProduct>& factory) {
-  
-  const char* name = ConcreteProduct::staticGetName();
-  typename NameFactory<AbstractProduct>::FactoryFunction
-	createConcreteProduct =
-	createConcreteProductHelper<AbstractProduct, ConcreteProduct>;
-  
-  factory.registerProduct(name, createConcreteProduct);
+void nameFactoryRegister(NameFactory<AbstractProduct>& factory) {
+  struct HoldsFunction {
+    static auto_ptr<AbstractProduct> createConcreteProduct() {
+      return auto_ptr<AbstractProduct>(new ConcreteProduct());
+    }
+  };
+  factory.registerProduct(ConcreteProduct::staticGetName(),
+                          HoldsFunction::createConcreteProduct);
+}
+
+template<class AbstractProduct>
+auto_ptr<AbstractProduct> createWithPrefix
+(const NameFactory<AbstractProduct>& factory, const string& prefix) {
+  return factory.createNoThrow(getUniqueNameWithPrefix(factory, prefix));
+}
+
+template<class AbstractProduct>
+string getUniqueNameWithPrefix
+(const NameFactory<AbstractProduct>& factory, const string& prefix) {
+  vector<string> names;
+  factory.getNamesWithPrefix(prefix, names);
+
+  if (find(names.begin(), names.end(), prefix) != names.end()) {
+    names.clear();
+    names.push_back(prefix);
+  }
+
+  if (names.empty()) {
+    throwError<UnknownNameException>
+      ("No " + factory.getAbstractProductName() +
+       " has the prefix \"" + prefix + "\".");
+  }
+
+  if (names.size() >= 2) {
+    string errorMsg = "More than one " + factory.getAbstractProductName() +
+      " has prefix \"" + prefix + "\":\n ";
+    for (size_t name = 0; name < names.size(); ++name)
+      errorMsg += ' ' + names[name];
+    throwError<AmbiguousNameException>(errorMsg);
+  }
+
+  ASSERT(names.size() == 1);
+  return names.back();
 }
 
 #endif

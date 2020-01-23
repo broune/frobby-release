@@ -17,11 +17,14 @@
 #include "stdinc.h"
 #include "HilbertAction.h"
 
-#include "BigIdeal.h"
-#include "IOFacade.h"
 #include "SliceFacade.h"
-#include "Scanner.h"
+#include "SliceParams.h"
+#include "BigattiFacade.h"
+#include "BigattiParams.h"
+#include "ScarfFacade.h"
 #include "DataType.h"
+#include "ScarfParams.h"
+#include "error.h"
 
 HilbertAction::HilbertAction():
   Action
@@ -38,41 +41,52 @@ HilbertAction::HilbertAction():
 
   _io(DataType::getMonomialIdealType(), DataType::getPolynomialType()),
 
+  _sliceParams(false, true, true),
+
   _univariate
   ("univariate",
    "Output a univariate polynomial by substituting t for each variable.",
-   false) {
-}
+   false),
 
-void HilbertAction::obtainParameters(vector<Parameter*>& parameters) {
-  _io.obtainParameters(parameters);
-  parameters.push_back(&_univariate);
-  _sliceParams.obtainParameters(parameters);
-  Action::obtainParameters(parameters);
+  _algorithm
+  ("algorithm",
+   "Which algorithm to use. Options are slice, bigatti and deform.",
+   "bigatti") {
+
+  _params.add(_io);
+  _params.add(_sliceParams);
+  _params.add(_univariate);
+  _params.add(_algorithm);
+
+  addScarfParams(_params);
 }
 
 void HilbertAction::perform() {
-  BigIdeal ideal;
-
-  _sliceParams.validateSplit(false, false);
-
-  {
-	Scanner in(_io.getInputFormat(), stdin);
-	_io.autoDetectInputFormat(in);
-	_io.validateFormats();
-
-	IOFacade facade(_printActions);
-	facade.readIdeal(in, ideal);
-	in.expectEOF();
-  }
-
-  auto_ptr<IOHandler> output = _io.createOutputHandler();
-  SliceFacade facade(ideal, output.get(), stdout, _printActions);
-  _sliceParams.apply(facade);
-  if (_univariate)
-	facade.computeUnivariateHilbertSeries();
-  else
-	facade.computeMultigradedHilbertSeries();
+  if (_algorithm.getValue() == "bigatti") {
+    BigattiParams params(_params);
+    BigattiFacade facade(params);
+    if (_univariate)
+      facade.computeUnivariateHilbertSeries();
+    else
+      facade.computeMultigradedHilbertSeries();
+  } else if (_algorithm.getValue() == "slice") {
+    SliceParams params(_params);
+    validateSplit(params, false, false);
+    SliceFacade sliceFacade(params, DataType::getPolynomialType());
+    if (_univariate)
+      sliceFacade.computeUnivariateHilbertSeries();
+    else
+      sliceFacade.computeMultigradedHilbertSeries();
+  } else if (_algorithm.getValue() == "deform") {
+    ScarfParams params(_params);
+    ScarfFacade facade(params);
+    if (_univariate)
+      facade.computeUnivariateHilbertSeries();
+    else
+      facade.computeMultigradedHilbertSeries();
+  } else
+    reportError("Unknown Hilbert-Poincare series algorithm \"" +
+                _algorithm.getValue() + "\".");
 }
 
 const char* HilbertAction::staticGetName() {

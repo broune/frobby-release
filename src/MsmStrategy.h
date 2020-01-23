@@ -37,13 +37,12 @@ class TermConsumer;
 class MsmStrategy : public SliceStrategyCommon {
  public:
   MsmStrategy(TermConsumer* consumer, const SplitStrategy* splitStrategy);
+  MsmStrategy(TermConsumer* consumer, const SplitStrategy* splitStrategy,
+              const Ideal& initialSubtract);
 
-  virtual auto_ptr<Slice> beginComputing(const Ideal& ideal);
-  virtual void doneComputing();
+  virtual void run(const Ideal& ideal);
 
-  virtual void split(auto_ptr<Slice> slice,
-					 SliceEvent*& leftEvent, auto_ptr<Slice>& leftSlice,
-					 SliceEvent*& rightEvent, auto_ptr<Slice>& rightSlice);
+  virtual bool processSlice(TaskEngine& tasks, auto_ptr<Slice> slice);
 
  protected:
   virtual void getPivot(Term& pivot, Slice& slice);
@@ -54,17 +53,16 @@ class MsmStrategy : public SliceStrategyCommon {
   virtual auto_ptr<Slice> allocateSlice();
   virtual bool debugIsValidSlice(Slice* slice);
 
-  void labelSplit(auto_ptr<MsmSlice> slice,
-				  auto_ptr<Slice>& leftSlice, auto_ptr<Slice>& rightSlice);
+  void labelSplit(auto_ptr<Slice> slice);
 
-  void independenceSplit(auto_ptr<MsmSlice> slice,
-						 SliceEvent*& leftEvent, auto_ptr<Slice>& leftSlice,
-						 SliceEvent*& rightEvent, auto_ptr<Slice>& rightSlice);
+  void independenceSplit(auto_ptr<Slice> slice);
 
   size_t getLabelSplitVariable(const Slice& slice);
 
   IndependenceSplitter _indep;
   TermConsumer* _consumer;
+
+  auto_ptr<Ideal> _initialSubtract;
 };
 
 #endif

@@ -39,17 +39,21 @@
 #include "PrimaryDecomAction.h"
 #include "OptimizeAction.h"
 #include "MaximalStandardAction.h"
+#include "LatticeAnalyzeAction.h"
 #include "DimensionAction.h"
+#include "EulerAction.h"
 
 Action::Action(const char* name,
-			   const char* shortDescription,
-			   const char* description,
-			   bool acceptsNonParameterParam):
+               const char* shortDescription,
+               const char* description,
+               bool acceptsNonParameterParam):
   _name(name),
   _shortDescription(shortDescription),
   _description(description),
   _acceptsNonParameter(acceptsNonParameterParam),
   _printActions("time", "Display and time each subcomputation.", false) {
+
+  _params.add(_printActions);
 }
 
 Action::~Action() {
@@ -59,32 +63,34 @@ namespace {
   typedef NameFactory<Action> ActionFactory;
 
   ActionFactory getActionFactory() {
-	ActionFactory factory;
+    ActionFactory factory("action");
 
-	nameFactoryRegister<HilbertAction>(factory);
-	nameFactoryRegister<IrreducibleDecomAction>(factory);
-	nameFactoryRegister<PrimaryDecomAction>(factory);
-	nameFactoryRegister<AlexanderDualAction>(factory);
-	nameFactoryRegister<AssociatedPrimesAction>(factory);
-	nameFactoryRegister<MaximalStandardAction>(factory);	
-	nameFactoryRegister<DimensionAction>(factory);	
-	nameFactoryRegister<OptimizeAction>(factory);
+    nameFactoryRegister<HilbertAction>(factory);
+    nameFactoryRegister<EulerAction>(factory);
+    nameFactoryRegister<IrreducibleDecomAction>(factory);
+    nameFactoryRegister<PrimaryDecomAction>(factory);
+    nameFactoryRegister<AlexanderDualAction>(factory);
+    nameFactoryRegister<AssociatedPrimesAction>(factory);
+    nameFactoryRegister<MaximalStandardAction>(factory);
+    nameFactoryRegister<DimensionAction>(factory);
+    nameFactoryRegister<OptimizeAction>(factory);
 
-	nameFactoryRegister<TransformAction>(factory);
-	nameFactoryRegister<PolyTransformAction>(factory);
+    nameFactoryRegister<TransformAction>(factory);
+    nameFactoryRegister<PolyTransformAction>(factory);
 
-	nameFactoryRegister<IntersectionAction>(factory);
-	nameFactoryRegister<GenerateIdealAction>(factory);
-	nameFactoryRegister<FrobeniusAction>(factory);
-	nameFactoryRegister<DynamicFrobeniusAction>(factory);
-	nameFactoryRegister<GenerateFrobeniusAction>(factory);
-	nameFactoryRegister<AnalyzeAction>(factory);
-	nameFactoryRegister<LatticeFormatAction>(factory);
+    nameFactoryRegister<IntersectionAction>(factory);
+    nameFactoryRegister<GenerateIdealAction>(factory);
+    nameFactoryRegister<FrobeniusAction>(factory);
+    nameFactoryRegister<DynamicFrobeniusAction>(factory);
+    nameFactoryRegister<GenerateFrobeniusAction>(factory);
+    nameFactoryRegister<AnalyzeAction>(factory);
+    nameFactoryRegister<LatticeFormatAction>(factory);
+    nameFactoryRegister<LatticeAnalyzeAction>(factory);
 
-	nameFactoryRegister<HelpAction>(factory);
-	nameFactoryRegister<TestAction>(factory);
+    nameFactoryRegister<HelpAction>(factory);
+    nameFactoryRegister<TestAction>(factory);
 
-	return factory;
+    return factory;
   }
 }
 
@@ -92,32 +98,16 @@ bool Action::displayAction() const {
   return true;
 }
 
-void Action::addNamesWithPrefix(const string& prefix,
-								vector<string>& names) {
-  getActionFactory().addNamesWithPrefix(prefix, names);
+const Parameter& Action::getParam(const string& name) const {
+  return _params.getParam(name);
+}
+
+void Action::getActionNames(vector<string>& names) {
+  getActionFactory().getNamesWithPrefix("", names);
 }
 
 auto_ptr<Action> Action::createActionWithPrefix(const string& prefix) {
-  vector<string> names;
-  addNamesWithPrefix(prefix, names);
-
-  if (names.empty())
-	reportError("No action has the prefix \"" + prefix + "\".\n");
-
-  if (names.size() >= 2) {
-	string err = "Prefix \"" + prefix + "\" is ambigous.\nPossibilities are:";
-	for (vector<string>::iterator name = names.begin();
-		 name != names.end(); ++name) {
-	  err += ' ';
-	  err += *name;
-	}
-	err += '\n';
-	reportError(err);
-  }
-
-  ASSERT(names.size() == 1);
-
-  return getActionFactory().createWithPrefix(prefix);
+  return createWithPrefix(getActionFactory(), prefix);
 }
 
 const char* Action::getName() const {
@@ -137,51 +127,25 @@ bool Action::acceptsNonParameter() const {
 }
 
 void Action::processNonParameter(const char*) {
-  ASSERT(false);
   reportInternalError("Action::processNonParameter called.");
 }
 
 void Action::obtainParameters(vector<Parameter*>& parameters) {
-  parameters.push_back(&_printActions);
-}
-
-void Action::processOption(const string& optionName,
-						   const char** params,
-						   unsigned int paramCount) {
-  for (vector<Parameter*>::iterator it = _parameters.begin();
-       it != _parameters.end(); ++it) {
-    if ((*it)->process(params - 1, paramCount + 1))
-      return;
-  }
-
-  reportError("Unknown option \"-" + optionName + "\".");
+  parameters.insert(parameters.end(), _params.begin(), _params.end());
 }
 
 void Action::parseCommandLine(unsigned int tokenCount, const char** tokens) {
+  vector<Parameter*> tmp;
+  obtainParameters(tmp);
+  for (size_t i = 0; i < tmp.size(); ++i)
+    if (!_params.hasParam(tmp[i]->getName()))
+      _params.add(*tmp[i]);
+
   if (acceptsNonParameter() && tokenCount > 0 && tokens[0][0] != '-') {
     processNonParameter(tokens[0]);
     --tokenCount;
     ++tokens;
   }
 
-  obtainParameters(_parameters);
-
-  unsigned int i = 0;
-  while (i < tokenCount) {
-    ASSERT(tokens[i][0] != '\0');
-
-    if (tokens[i][0] != '-')
-	  reportError(string("Expected an option when reading \"") +
-				  tokens[i] + "\", but options start with a dash (-).\n");
-
-    unsigned int paramCount = 0;
-    while (i + 1 + paramCount < tokenCount &&
-	   tokens[i + 1 + paramCount][0] != '-')
-      ++paramCount;
-
-    string optionName(tokens[i] + 1);
-    processOption(optionName, tokens + i + 1, paramCount);
-
-    i += paramCount + 1;
-  }
+  _params.parseCommandLine(tokenCount, tokens);
 }

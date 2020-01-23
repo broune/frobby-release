@@ -30,6 +30,11 @@ void BigTermRecorder::consumeRing(const VarNames& names) {
   _names = names;
 }
 
+void BigTermRecorder::consume(auto_ptr<BigIdeal> ideal) {
+  consumeRing(ideal->getNames());
+  exceptionSafePushBack(_ideals, ideal);
+}
+
 void BigTermRecorder::beginConsuming() {
   auto_ptr<BigIdeal> ideal(new BigIdeal(_names));
   exceptionSafePushBack(_ideals, ideal);
@@ -46,7 +51,7 @@ void BigTermRecorder::consume
   ideal.newLastTerm();
   size_t varCount = ideal.getVarCount();
   for (size_t var = 0; var < varCount; ++var)
-	ideal.getLastTermExponentRef(var) = translator.getExponent(var, term);
+    ideal.getLastTermExponentRef(var) = translator.getExponent(var, term);
 }
 
 void BigTermRecorder::consume(const vector<mpz_class>& term) {
@@ -56,7 +61,7 @@ void BigTermRecorder::consume(const vector<mpz_class>& term) {
   ideal.newLastTerm();
   size_t varCount = ideal.getVarCount();
   for (size_t var = 0; var < varCount; ++var)
-	ideal.getLastTermExponentRef(var) = term[var];
+    ideal.getLastTermExponentRef(var) = term[var];
 }
 
 void BigTermRecorder::doneConsuming() {

@@ -17,7 +17,9 @@
 #include "stdinc.h"
 #include "Polynomial.h"
 
+#include "TermPredicate.h"
 #include <algorithm>
+#include <sstream>
 
 Polynomial::Polynomial():
   _varCount(0) {
@@ -54,53 +56,66 @@ void Polynomial::add(const mpz_class& coef, const Term& term) {
   ASSERT(_varCount == term.getVarCount());
 
   if (coef == 0)
-	return;
+    return;
 
   _terms.resize(_terms.size() + 1);
   try {
-	_terms.back().coef = coef;
-	_terms.back().term = term;
+    _terms.back().coef = coef;
+    _terms.back().term = term;
   } catch (std::bad_alloc) {
-	_terms.pop_back();
-	throw;
+    _terms.pop_back();
+    throw;
   }
 }
 
 void Polynomial::sortTermsReverseLex(bool collect) {
   if (_terms.empty())
-	return;
+    return;
 
   sort(_terms.begin(), _terms.end());
 
   if (!collect)
-	return;
+    return;
 
   // TODO: improve collection. E.g. have it be its own method.
 
   size_t last = 0;
   for (size_t i = 1; i < _terms.size(); ++i) {
-	if (_terms[last].term == _terms[i].term)
-	  _terms[last].coef += _terms[last].coef;
-	else {
-	  if (_terms[last].coef == 0)
-		_terms[last] = _terms[i];
-	  else {
-		++last;
-		if (last != i)
-		  _terms[last] = _terms[i];
-	  }
-	}
+    if (_terms[last].term == _terms[i].term)
+      _terms[last].coef += _terms[i].coef;
+    else {
+      if (_terms[last].coef == 0)
+        _terms[last] = _terms[i];
+      else {
+        ++last;
+        if (last != i)
+          _terms[last] = _terms[i];
+      }
+    }
   }
 
   ASSERT(last < _terms.size());
-  _terms.erase(_terms.begin() + last + 1, _terms.end());	
+  _terms.erase(_terms.begin() + last + 1, _terms.end());
 }
 
 bool Polynomial::CoefTerm::operator<(const CoefTerm& coefTerm) const {
   ASSERT(term.getVarCount() == coefTerm.term.getVarCount());
-  return Term::reverseLexCompare(term, coefTerm.term, term.getVarCount()) < 0;
+  return reverseLexCompare(term, coefTerm.term, term.getVarCount()) < 0;
 }
 
 void Polynomial::clear() {
   _terms.clear();
+}
+
+void Polynomial::print(FILE* out) {
+  ostringstream str;
+  print(str);
+  fputs(str.str().c_str(), out);
+}
+
+void Polynomial::print(ostream& out) {
+  out << "//------- Polynomial:\n";
+  for (size_t i = 0; i < _terms.size(); ++i)
+    out << getCoef(i) << "*" << getTerm(i) << '\n';
+  out << "----------\\\\\n";
 }

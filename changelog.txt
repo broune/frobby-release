@@ -1,0 +1,168 @@
+*** Version 0.9.0, 2011-09-23
+
+ - Added support for computing Euler characteristic
+ - Added a deformation algorithm for computing Hilbert-Poincare series
+ - Added the Bigatti et al. algorithm for computing Hilbert-Poincare series
+ - Improved the Slice algorithm implementation for computing H-P series
+ - All option names can now be given as a unique prefix just as for action names
+ - The analyze action can now report on strong and weak genericity
+ - The library interface now supports primary decomposition
+ - The library interface now supports associated primes
+ - Reading input monomial ideals is now significantly faster
+
+The new Euler characteristic code uses a new algorithm that is joint
+work with Eduardo Saenz-de-Cabezon. As documented in our paper, the
+Frobby implementation of this algorithm is much faster than
+implementations of Euler characteristic algorithms in other
+systems. The euler action has many options, but the default should be the
+fastest for nearly all ideals.
+
+The Hilbert-Poincare series code was written to compare the Slice
+algorithm, the deformation algorithm and the Bigatti et
+al. algorithm. The deformation has as far as I know never previously
+been implemented or even very explicitly described in the
+litterature. The Bigatti algorithm wasn't faster initially after
+implementing it as described in the litterature, but with some
+additional improvements it got significantly better. It still is not
+faster for all ideals, but the improved version is still usually the
+best algorithm which is why it is the default algorithm used.
+
+*** Version 0.8.2, 2009-07-07
+
+New features and improvements in this version include
+
+ - Fast dimension and codimension of monomial ideals
+ - Various speed improvements (see below)
+ - Generation of random edge ideals
+ - Optimization over maximal standard monomials with negative
+   objective function.
+
+The new (co)dimension code uses an algorithm gleaned from the source
+code of Macaulay 2, though the code in Frobby is substantially faster
+due to a few improvements. It is not known to me who to credit with
+this algorithm. Now that Frobby supports negative objective functions,
+the more general optimize action can also be used to compute the
+dimension, but this is not nearly as fast.
+
+There are also many smaller improvements. They are too many to list
+here, but the more visible ones are shown below.
+
+ ** Performance improvements
+
+ - Actions frobgrob and optimize are substantially faster due to code
+   improvements and due to the bound optimization now being
+   accessible. It had been turned off by mistake in the previous
+   release, even when explicitly requested via the command line option
+   -bound. The bound optimization itself has been improved to work
+   with objective funtions with negative entries.
+
+ - Improved the pure power split selection strategies to choose a
+   middle variable in case of ties instead of the left-most
+   variable. This makes no difference for most inputs, but leads to
+   dramatic speed-ups for some particular highly non-generic inputs.
+
+ - All slice-based algorithms are slightly faster due to low-level
+   code improvements.
+
+ - The action optimize now uses the degree split strategy by default
+   instead of median, which is faster.
+
+ ** Deprecated functionality
+
+ - The action frobgrob is deprecated and will be removed in a future
+   version of Frobby. Use the action optimize with options
+   chopFirstAndSubtract and maxStandard to achieve the same effect.
+
+ - The split selection strategy named frob is now deprecated and will
+   be removed in a future version of Frobby. Use the name degree to
+   achieve the same effect.
+
+ ** Miscellaneous improvements
+
+ - The polynomial ring is named R in the Macaulay 2 format, which is a
+   problem if there is also a variable named R in the ring, since then
+   Macaulay 2 will report an error on reading the file. Frobby now
+   renames the ring to R1 in that case, or R2 if there is also a
+   variable named R1 and so on.
+
+ - All formats now support underscores as part of variable names.
+
+ - There is now an output format "count" that just prints the total
+   number of generators.
+
+ ** Technical Improvements
+
+ - A benchmark suite has been added to detect preformance regressions,
+   such as the above situation with the bound optimization getting
+   turned off. There is also support for profiling to detect the lines
+   of code that are taking the most time.
+
+ - The amount of information in the developer documentation, which is
+   generated based on source code comments, has increased
+   substantially.
+
+ - The design for how internal C++ tests are done is much improved and
+   the number of tests bas been expanded substantially.
+
+ - Code file dependency tracking is much improved. It is now fully automatic,
+   so the Makefile target depend is removed.
+
+ - All Frobby files now use unix-style line endings, rather than the
+   mix that was there before.
+
+ - Frobby now explicitly refuses to use independence splits when
+   solving Frobenius problems and other optimization problems. They
+   were never implemented for that case.
+
+ - The install makefile target now uses sudo, so that it does not have
+   to be run as root to install Frobby. This is not the case on
+   Cygwin, which does not seem to have sudo. 
+
+ - Option -chopFirstAndSubtract now fails gracefully when there are no
+   variables, such as when using -iformat null. In general actions now
+   deal well with -iformat null, and this is now part of the
+   testsuite.
+
+ - Numerous small improvements to performance, design and comments all
+   over the codebase.
+
+*** Version 0.8.1, 2009-04-30
+
+This is a minor update.
+
+ - There is now a manual in doc/manual.tex.
+ - Frobby no longer crashes when using the -stats and -debug options.
+ - The developer documentation can now be built on Cygwin.
+ - The example/ directory is now named liraryTest/ to avoid confusion.
+ - The Makefile now has an "install" target.
+
+*** Version 0.8.0, 2009-02-12
+
+This version adds support for
+
+ - Hilbert-Poincare series.
+ - Primary decomposition.
+ - Maximal standard monomials.
+ - Linear optimization problems over monomial ideals.
+ - The format cocoa4 that can be processed by CoCoA 4.
+ - The format singular, which can be processed by Singular.
+ - Manipulation of polynomials for formats where it makes sense.
+
+The library interface is expanded and is now tested in the
+testsuite. This interface is being used by Macaulay 2 and CoCoA to
+perform some of their computations on monomial ideals. The library
+interface, and Frobby in general, is now exception-safe and deals
+gracefully with running out of memory. Frobby is also included with
+Sage as an optional package.
+
+The testsuite for every functionality has been greatly extended and
+improved, with the consequence that the tests now take much longer to
+run, as they are testing many more aspects of Frobby and there is more
+testing going on.
+
+Having Frobby included with Macaulay 2 and CoCoA has resulted in a
+number of improvements to make Frobby build correctly on the many
+platforms that these systems support. Thanks goes to Daniel R. Grayson,
+Michael Stillman and Anna Bigatti for their work on this.
+
+** Changes were not tracked prior to version 0.8.0

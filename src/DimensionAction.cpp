@@ -23,11 +23,11 @@
 #include "Scanner.h"
 #include "BigIdeal.h"
 #include "BigTermConsumer.h"
-#include "NullTermConsumer.h"
-#include "error.h"
 #include "SliceFacade.h"
+#include "SliceParams.h"
 #include "NullTermConsumer.h"
 #include "SliceParameters.h"
+#include "error.h"
 
 #include <algorithm>
 
@@ -73,35 +73,29 @@ void DimensionAction::obtainParameters(vector<Parameter*>& parameters) {
 }
 
 void DimensionAction::perform() {
-  BigIdeal ideal;
-  {
-	Scanner in(_io.getInputFormat(), stdin);
-	_io.autoDetectInputFormat(in);
-	_io.validateFormats();
-
-	IOFacade ioFacade(_printActions);
-	ioFacade.readIdeal(in, ideal);
-	in.expectEOF();
-  }
-  mpz_class dimension;
-
+  mpz_class result;
   if (_useSlice) {
-	NullTermConsumer nullConsumer;
-	SliceFacade facade(ideal, &nullConsumer, _printActions);
-	SliceParameters params(true, false);
-	params.apply(facade);
-	dimension = facade.computeDimension();
+    SliceParams params;
+    params.useIndependenceSplits(false); // not supported
+    validateSplit(params, true, false);
+    SliceFacade facade(params, DataType::getNullType());
+    result = facade.computeDimension(_codimension);
   } else {
-	IdealFacade facade(_printActions);
-	dimension = facade.computeDimension(ideal, _squareFreeAndMinimal);
-  }
+    BigIdeal ideal;
+    Scanner in(_io.getInputFormat(), stdin);
+    _io.autoDetectInputFormat(in);
+    _io.validateFormats();
 
-  if (_codimension) {
-	mpz_class varCount = ideal.getVarCount();
-	mpz_class codimension = varCount - dimension;
-	gmp_fprintf(stdout, "%Zd\n", codimension.get_mpz_t());
-  } else
-	gmp_fprintf(stdout, "%Zd\n", dimension.get_mpz_t());
+    IOFacade ioFacade(_printActions);
+    ioFacade.readIdeal(in, ideal);
+    in.expectEOF();
+
+    IdealFacade facade(_printActions);
+    result = facade.computeDimension(ideal,
+                                     _codimension,
+                                     _squareFreeAndMinimal);
+  }
+  gmp_fprintf(stdout, "%Zd\n", result.get_mpz_t());
 }
 
 const char* DimensionAction::staticGetName() {

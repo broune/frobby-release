@@ -22,7 +22,7 @@
 
 void reportError(const string& errorMsg) {
   FrobbyStringStream err;
-  err << "ERROR: " << errorMsg << '\n';
+  err << "ERROR: " << errorMsg;
   throw FrobbyException(err);
 }
 
@@ -32,42 +32,27 @@ void reportInternalError(const string& errorMsg) {
   throw InternalFrobbyException(err);
 }
 
+void reportInternalError
+(const string& errorMsg, const char* file, unsigned int lineNumber) {
+  FrobbyStringStream err;
+  err << errorMsg << '\n'
+      << "The internal error occured in file " << file
+      << " on line " << lineNumber << '.';
+  reportInternalError(err);
+}
+
 void reportSyntaxError(const Scanner& scanner, const string& errorMsg) {
   FrobbyStringStream err;
   err << "SYNTAX ERROR (";
 
   if (scanner.getFormat() != "")
-	err << "format " << scanner.getFormat() << ", ";
+    err << "format " << scanner.getFormat() << ", ";
 
   err << "line "
-	  << scanner.getLineNumber()
-	  << "):\n  "
-	  << errorMsg
-	  << '\n';
+      << scanner.getLineNumber()
+      << "):\n  "
+      << errorMsg
+      << '\n';
 
   throw FrobbyException(err);
-}
-
-void displayNote(const string& msg) {
-  fprintf(stderr, "NOTE: %s\n", msg.c_str());
-}
-
-void displayDebugNote(const string& msg) {
-  fprintf(stderr, "DEBUG: %s\n", msg.c_str());
-}
-
-void reportErrorNoThrow(const string& errorMsg) {
-  reportErrorNoThrow(errorMsg.c_str());
-}
-
-void reportErrorNoThrow(const char* errorMsg) {
-  fprintf(stderr, "ERROR: %s\n", errorMsg);
-}
-
-void reportErrorNoThrow(const FrobbyException& e) {
-  fputs(e.what(), stderr);
-}
-
-void reportErrorNoThrow(const InternalFrobbyException& e) {
-  fputs(e.what(), stderr);
 }

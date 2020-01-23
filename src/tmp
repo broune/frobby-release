@@ -1,0 +1,36 @@
+
+++base
+extrasupport + support is not all variables (non full support) return 0
+
+
+++base
+if each variable divides exactly one generator, then we have an independence split
+at base case. if there is an odd number of generators then flip sign. then return 1 with the appropriate sign.
+
+++base
+if there are exactly two generators, then the answer is +1.
+
+++ simplify: eliminate1counts
+Do this for variables that divide only 1 generator:
+ let A be the unique generator that it divides.
+ mark those variables that divide A and that also divide any other generator.
+ colonReminize those variabels
+ remove A if still present and flip value sign
+
+++simplify: (canSimp)
+Colon-reminimize away variables V that have this property:
+  there is a variable U such that for all generator G, if U|G then V|G.
+  do not have to check this when V appears in less generator than U does as then it can't be true.
+  in other words, U does not divide lcm(G such that V does not divide G)
+
+
+
+if we can get rid of some variables like this, recheck the base cases above. (do we want to re-check this condition itself?)
+
+++
+if there are exactly 3 generators, return 2.
+
+++
+if there are exactly 4 generators and
+no var divides more than 2 generators and
+only 4 variables are present then return -1.

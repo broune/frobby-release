@@ -22,31 +22,52 @@
 
 class Scanner;
 
-// This class is pure virtual to ensure that it is catch'ed by
-// reference. This is necessary to prevent object slicing, since the
-// actual exceptions thrown have more data members and it is
-// undesirable to expose those in this header.
+/** This is the base of the Frobby exception hierarchy for exceptions
+ that can occur due to expected error conditions. */
 class FrobbyException : public std::runtime_error {
  public:
   FrobbyException(const string& str): runtime_error(str) {}
 };
 
+/** This exception signals that a bug in Frobby has been detected. */
 class InternalFrobbyException : public std::logic_error {
  public:
   InternalFrobbyException(const string& str): logic_error(str) {}
 };
 
+// The do {...} while (0) is to collect everything into a single
+// statement that still requires a semicolon after it. The throw is to
+// prevent spurious compiler warnings about a missing return
+// statement.
+#define INTERNAL_ERROR(msg) \
+  do { \
+    reportInternalError(msg, __FILE__, __LINE__); \
+    throw; \
+  } while (false)
+#define INTERNAL_ERROR_UNIMPLEMENTED() \
+  INTERNAL_ERROR("Called function that has not been implemented.")
+
 // These methods throw exceptions.
 void reportError(const string& errorMsg);
 void reportInternalError(const string& errorMsg);
+void reportInternalError
+(const string& errorMsg, const char* file, unsigned int lineNumber);
 void reportSyntaxError(const Scanner& scanner, const string& errorMsg);
 
-// These methods return normally.
-void displayNote(const string& msg);
-void displayDebugNote(const string& msg);
-void reportErrorNoThrow(const char* errorMsg);
-void reportErrorNoThrow(const string& e);
-void reportErrorNoThrow(const FrobbyException& e);
-void reportErrorNoThrow(const InternalFrobbyException& e);
+template<class Exception>
+void throwError(const string& errorMsg) {
+  throw Exception("ERROR: " + errorMsg + '\n');
+}
+
+
+#define DEFINE_EXCEPTION(NAME) \
+  class NAME##Exception : public FrobbyException { \
+  public: \
+    NAME##Exception(const string& str): FrobbyException(str) {} \
+  }
+
+DEFINE_EXCEPTION(UnknownName);
+DEFINE_EXCEPTION(AmbiguousName);
+DEFINE_EXCEPTION(Unsupported);
 
 #endif

@@ -17,6 +17,7 @@
 #include "stdinc.h"
 #include "Term.h"
 
+#include "TermPredicate.h"
 #include <sstream>
 #include <vector>
 
@@ -30,55 +31,55 @@ Term::Term(const string& str):
   vector<Exponent> exponents;
   mpz_class ex;
   while (in >> ex) {
-	ASSERT(ex.fits_uint_p());
-	exponents.push_back(ex.get_ui());
+    ASSERT(ex.fits_uint_p());
+    exponents.push_back(ex.get_ui());
   }
 
   if (!exponents.empty())
-	initialize(&(exponents[0]), exponents.size());
+    initialize(&(exponents[0]), exponents.size());
 }
 
 namespace {
   struct ObjectPool {
-	ObjectPool(): objectsStored(0), objects(0) {}
+    ObjectPool(): objectsStored(0), objects(0) {}
 
-	void ensureInit() {
-	  if (objects == 0)
-		objects = new Exponent*[ObjectPoolSize];
-	}
+    void ensureInit() {
+      if (objects == 0)
+        objects = new Exponent*[ObjectPoolSize];
+    }
 
-	bool empty() const {
-	  return objectsStored == 0;
-	}
+    bool empty() const {
+      return objectsStored == 0;
+    }
 
-	bool canStoreMore() const {
-	  return objectsStored < ObjectPoolSize;
-	}
+    bool canStoreMore() const {
+      return objectsStored < ObjectPoolSize;
+    }
 
-	Exponent* removeObject() {
-	  ASSERT(!empty());
-	  --objectsStored;
-	  return objects[objectsStored];
-	}
+    Exponent* removeObject() {
+      ASSERT(!empty());
+      --objectsStored;
+      return objects[objectsStored];
+    }
 
-	void addObject(Exponent* object) {
-	  ASSERT(canStoreMore());
-	  ASSERT(objects != 0);
+    void addObject(Exponent* object) {
+      ASSERT(canStoreMore());
+      ASSERT(objects != 0);
 
-	  objects[objectsStored] = object;
-	  ++objectsStored;
-	}
+      objects[objectsStored] = object;
+      ++objectsStored;
+    }
 
-	~ObjectPool() {
-	  if (objects == 0)
-		return;
-	  for (size_t i = 0; i < objectsStored; ++i)
-		delete[] objects[i];
-	  delete[] objects;
-	}
+    ~ObjectPool() {
+      if (objects == 0)
+        return;
+      for (size_t i = 0; i < objectsStored; ++i)
+        delete[] objects[i];
+      delete[] objects;
+    }
 
-	unsigned int objectsStored;
-	Exponent** objects;
+    unsigned int objectsStored;
+    Exponent** objects;
   } pools[PoolCount];
 }
 
@@ -86,12 +87,12 @@ Exponent* Term::allocate(size_t size) {
   ASSERT(size > 0);
 
   if (size < PoolCount) {
-	pools[size].ensureInit();
-	if (!pools[size].empty())
-	  return pools[size].removeObject();
+    pools[size].ensureInit();
+    if (!pools[size].empty())
+      return pools[size].removeObject();
   }
 
-  return new Exponent[size];  
+  return new Exponent[size];
 }
 
 void Term::deallocate(Exponent* p, size_t size) {
@@ -113,13 +114,17 @@ void Term::print(FILE* file, const Exponent* e, size_t varCount) {
 }
 
 void Term::print(ostream& out, const Exponent* e, size_t varCount) {
-	ASSERT(e != 0 || varCount == 0);
+  ASSERT(e != 0 || varCount == 0);
 
-	out << '(';
-	for (size_t var = 0; var < varCount; ++var) {
-	  if (var != 0)
-		out << ", ";
-	  out << e[var];
-	}
-	out << ')';
+  out << '(';
+  for (size_t var = 0; var < varCount; ++var) {
+    if (var != 0)
+      out << ", ";
+    out << e[var];
   }
+  out << ')';
+}
+
+bool Term::operator==(const Exponent* term) const {
+  return equals(begin(), term, getVarCount());
+}

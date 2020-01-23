@@ -63,13 +63,11 @@ public:
 
   TermTranslator& operator=(const TermTranslator& translator);
 
-  /** This method translates from IDs to infinite precision
-   integers.
+  /** This method translates from IDs to arbitrary precision integers.
   */
   const mpz_class& getExponent(size_t variable, Exponent exponent) const;
 
-  /** This method translates from IDs to infinite precision
-   integers.
+  /** This method translates from IDs to arbitrary precision integers.
   */
   const mpz_class& getExponent(size_t variable, const Term& term) const;
 
@@ -85,8 +83,8 @@ public:
   const char* getExponentString(size_t variable, Exponent exponent) const;
 
   /** The assigned IDs are those in the range [0, getMaxId(var)]. As a
-	  special case, getMaxId(var) maps to the same exponent as 0
-	  does. */
+      special case, getMaxId(var) maps to the same exponent as 0
+      does. */
   Exponent getMaxId(size_t variable) const;
 
   /** Adds a generator of the form v^e, e > 0, for any variable v where
@@ -152,6 +150,8 @@ class TranslatedReverseLexComparator {
  private:
   const TermTranslator& _translator;
 };
+
+void setToZeroOne(TermTranslator& translator);
 
 ostream& operator<<(ostream& out, const TermTranslator& translator);
 

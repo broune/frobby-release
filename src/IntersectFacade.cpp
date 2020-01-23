@@ -18,6 +18,7 @@
 #include "stdinc.h"
 #include "IntersectFacade.h"
 
+#include "Term.h"
 #include "BigIdeal.h"
 #include "Ideal.h"
 #include "intersect.h"

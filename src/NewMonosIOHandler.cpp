@@ -30,7 +30,7 @@ public:
   }
 
   NewMonosIdealWriter(FILE* file, const TermTranslator* translator):
-    IdealWriter(file, translator) {
+    IdealWriter(file, translator, true) {
     writeHeader();
   }
 

@@ -23,11 +23,15 @@
 typedef vector<Exponent*>::iterator iterator;
 
 ::iterator simpleMinimize(::iterator begin, ::iterator end, size_t varCount) {
+  if (begin == end)
+	return end;
+
   std::sort(begin, end, Term::LexComparator(varCount));
 
   ::iterator newEnd = begin;
-  for (::iterator dominator = begin; dominator != end; ++dominator) {
-
+  ++newEnd; // The first one is always kept
+  ::iterator dominator = newEnd;
+  for (; dominator != end; ++dominator) {
 	bool remove = false;
 	for (::iterator divisor = begin; divisor != newEnd; ++divisor) {
 	  if (::divides(*divisor, *dominator, varCount)) {
@@ -240,4 +244,158 @@ Minimizer::iterator Minimizer::minimize(iterator begin, iterator end) const {
   node.collect(terms);
 
   return copy(terms.begin(), terms.end(), begin);
+}
+
+pair<Minimizer::iterator, bool> Minimizer::colonReminimize
+(iterator begin, iterator end, const Exponent* colon) {
+  ASSERT(isMinimallyGenerated(begin, end));
+
+  if (::getSizeOfSupport(colon, _varCount) == 1) {
+	size_t var = ::getFirstNonZeroExponent(colon, _varCount);
+	return colonReminimize(begin, end, var, colon[var]);
+  }
+
+  iterator blockBegin = end;
+  for (iterator it = begin; it != blockBegin;) {
+	bool block = true;
+	bool strictDivision = true;
+	for (size_t var = 0; var < _varCount; ++var) {
+	  if (colon[var] >= (*it)[var]) {
+		if ((*it)[var] > 0)
+		  block = false;
+		if (colon[var] > 0)
+		  strictDivision = false;
+		(*it)[var] = 0;
+	  } else
+		(*it)[var] -= colon[var];
+	}
+
+	if (strictDivision) {
+	  swap(*begin, *it);
+	  ++begin;
+	  ++it;
+	} else if (block) {
+	  --blockBegin;
+	  swap(*it, *blockBegin);
+	} else
+	  ++it;
+  }
+
+  if (begin == blockBegin)
+	return make_pair(end, false);
+
+  iterator newEnd = minimize(begin, blockBegin);
+
+  for (iterator it = blockBegin; it != end; ++it) {
+	if (!dominatesAny(begin, blockBegin, *it)) {
+	  *newEnd = *it;
+	  ++newEnd;
+	}
+  }
+
+  ASSERT(isMinimallyGenerated(begin, newEnd));
+  return make_pair(newEnd, true);
+}
+
+bool Minimizer::isMinimallyGenerated
+(const_iterator begin, const_iterator end) {
+  if (distance(begin, end) < 1000 || _varCount == 0) {
+	for (const_iterator divisor = begin; divisor != end; ++divisor)
+	  for (const_iterator dominator = begin; dominator != end; ++dominator)
+		if (::divides(*divisor, *dominator, _varCount) && divisor != dominator)
+		  return false;
+	return true;
+  }
+  
+  vector<Exponent*> terms(begin, end);
+  TreeNode node(terms.begin(), terms.end(), _varCount);
+  node.makeTree();
+
+  vector<Exponent*> terms2;
+  node.collect(terms2);
+
+  return terms.size() == terms2.size();
+}
+
+bool Minimizer::dominatesAny
+(iterator begin, iterator end, const Exponent* term) {
+  for (; begin != end; ++begin)
+	if (::dominates(term, *begin, _varCount))
+	  return true;
+  return false;
+}
+
+bool Minimizer::dividesAny
+(iterator begin, iterator end, const Exponent* term) {
+  for (; begin != end; ++begin)
+	if (::divides(term, *begin, _varCount))
+	  return true;
+  return false;
+}
+
+pair<Minimizer::iterator, bool> Minimizer::colonReminimize
+(iterator begin, iterator end, size_t var, Exponent exponent) {
+
+  // Sort in descending order according to exponent of var while
+  // ignoring everything that is strictly divisible by
+  // var^exponent. We put the zero entries at the right end
+  // immediately, before calling sort, because there are likely to be
+  // many of them, and we can do so while we are anyway looking for
+  // the strictly divisible monomials. The combination of these
+  // significantly reduce the number of monomials that need to be
+  // sorted.
+  iterator zeroBegin = end;
+  for (iterator it = begin; it != zeroBegin;) {
+	if ((*it)[var] > exponent) {
+	  (*it)[var] -= exponent; // apply colon
+	  swap(*it, *begin);
+	  ++begin;
+	  ++it;
+	} else if ((*it)[var] == 0) {
+	  // no need to apply colon in this case
+	  --zeroBegin;
+	  swap(*it, *zeroBegin);
+	} else
+	  ++it;
+  }
+
+  if (begin == zeroBegin)
+	return make_pair(end, false);
+
+  // Sort the part of the array that we have not handled yet.
+  std::sort(begin, zeroBegin,
+			Term::DescendingSingleDegreeComparator(var, _varCount));
+
+  // We group terms into blocks according to term[var].
+  iterator previousBlockEnd = begin;
+  iterator newEnd = begin;
+
+  Exponent block = (*begin)[var];
+
+  for (iterator it = begin; it != end; ++it) {
+    // Detect if we are moving on to next block.
+    if ((*it)[var] != block) {
+      block = (*it)[var];
+      previousBlockEnd = newEnd;
+    }
+
+	ASSERT((*it)[var] <= exponent);
+	(*it)[var] = 0;
+
+    bool remove = false;
+
+    for (iterator divisor = begin; divisor != previousBlockEnd; ++divisor) {
+      if (::divides(*divisor, *it, _varCount)) {
+		remove = true;
+		break;
+      }
+    }
+
+    if (!remove) {
+      *newEnd = *it;
+      ++newEnd;
+    }
+  }
+
+  return make_pair(newEnd, true);
 }

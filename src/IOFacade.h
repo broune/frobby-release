@@ -22,29 +22,29 @@
 #include <vector>
 
 class BigIdeal;
+class Scanner;
 
 class IOFacade : private Facade {
  public:
   IOFacade(bool printActions);
 
-  bool isValidMonomialIdealFormat(const char* format);
-  void readIdeal(FILE* in, BigIdeal& ideal, const char* format = "monos");
-  void readIdeals(FILE* in, vector<BigIdeal*>& ideal,
-				  const char* format = "monos"); // inserts the read ideals
-  void writeIdeal(FILE* out, BigIdeal& ideal, const char* format = "monos");
+  bool isValidMonomialIdealFormat(const string& format);
+  void readIdeal(Scanner& in, BigIdeal& ideal);
+  void readIdeals(Scanner& in,
+				  vector<BigIdeal*>& ideal); // inserts the read ideals
+  void writeIdeal(FILE* out, BigIdeal& ideal, const string& format);
 
-  void readFrobeniusInstance(FILE* in, vector<mpz_class>& instance);
+  void readFrobeniusInstance(Scanner& in, vector<mpz_class>& instance);
   void readFrobeniusInstanceWithGrobnerBasis
-    (FILE* in, BigIdeal& ideal, vector<mpz_class>& instance);
+    (Scanner& in, BigIdeal& ideal, vector<mpz_class>& instance);
   void writeFrobeniusInstance(FILE* out, vector<mpz_class>& instance);
 
   bool readAlexanderDualInstance
-	(FILE* in, BigIdeal& ideal, vector<mpz_class>& term,
-	 const char* format = "monos");
+	(Scanner& in, BigIdeal& ideal, vector<mpz_class>& term);
 
-  bool isValidLatticeFormat(const char* format);
-  void readLattice(FILE* in, BigIdeal& ideal, const char* format);
-  void writeLattice(FILE* out, const BigIdeal& ideal, const char* format);
+  bool isValidLatticeFormat(const string& format);
+  void readLattice(Scanner& in, BigIdeal& ideal);
+  void writeLattice(FILE* out, const BigIdeal& ideal, const string& format);
 };
 
 #endif

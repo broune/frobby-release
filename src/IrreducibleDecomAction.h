@@ -19,6 +19,7 @@
 #define IRREDUCIBLE_DECOM_ACTION
 
 #include "Action.h"
+#include "IOParameters.h"
 #include "IrreducibleDecomParameters.h"
 
 class IrreducibleDecomAction : public Action {
@@ -35,6 +36,7 @@ class IrreducibleDecomAction : public Action {
 
  private:
   IrreducibleDecomParameters _decomParameters;
+  IOParameters _io;
 };
 
 #endif

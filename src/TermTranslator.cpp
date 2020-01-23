@@ -70,8 +70,8 @@ bool mpzClassPointerEqual(const mpz_class* a, const mpz_class* b) {
 //
 // extractExponents changes the exponents that it extracts.
 void extractExponents(const vector<BigIdeal*>& ideals,
-		   vector<mpz_class>& exponents,
-		   const string& varName) {
+					  vector<mpz_class>& exponents,
+					  const string& varName) {
   vector<mpz_class*> exponentRefs;
 
   mpz_class zero(0);
@@ -84,6 +84,10 @@ void extractExponents(const vector<BigIdeal*>& ideals,
   exponentRefs.reserve(termCount + 1); // + 1 because we added the 0 above.
 
   // Collect the exponents
+  const int MaxSmall = 1000;
+  bool seen[MaxSmall + 1]; // avoid adding small numbers more than once
+  fill_n(seen, MaxSmall + 1, false);
+  seen[0] = true;
   for (size_t i = 0; i < ideals.size(); ++i) {
     BigIdeal& ideal = *(ideals[i]);
     size_t var = ideal.getNames().getIndex(varName);
@@ -91,8 +95,17 @@ void extractExponents(const vector<BigIdeal*>& ideals,
       continue;
 
     size_t generatorCount = ideal.getGeneratorCount();
-    for (size_t term = 0; term < generatorCount; ++term)
-      exponentRefs.push_back(&(ideal.getExponent(term, var)));
+    for (size_t term = 0; term < generatorCount; ++term) {
+	  const mpz_class& e = ideal.getExponent(term, var);
+	  if (e <= MaxSmall) {
+		ASSERT(e.fits_uint_p());
+		unsigned int i = e.get_ui();
+		if (seen[i])
+		  continue;
+		seen[i] = true;
+	  }
+	  exponentRefs.push_back(&(ideal.getExponent(term, var)));
+	}
   }
 
   // Sort and remove duplicates.
@@ -208,9 +221,6 @@ void TermTranslator::dualize(const vector<mpz_class>& a) {
 		_exponents[var][exp] = a[var] - _exponents[var][exp] + 1;
 	}
   }
-
-  if (hasStrings)
-	makeStrings();
 }
 
 void TermTranslator::print(FILE* file) const {
@@ -227,9 +237,8 @@ void TermTranslator::print(FILE* file) const {
   fputs(")\n", file);
 }
 
-void TermTranslator::makeStrings() const {
-  if (!_stringExponents.empty())
-    return;
+void TermTranslator::makeStrings(bool includeVar) const {
+  ASSERT(_stringExponents.empty());
 
   _stringExponents.resize(_exponents.size());
   for (unsigned int i = 0; i < _exponents.size(); ++i) {
@@ -237,12 +246,16 @@ void TermTranslator::makeStrings() const {
     for (unsigned int j = 0; j < _exponents[i].size(); ++j) {
       char* str = 0;
 
-      if (_exponents[i][j] != 0) {
+      if (_exponents[i][j] != 0 || !includeVar) {
 		stringstream out;
-		out << _names.getName(i);
-		if (_exponents[i][j] != 1) 
-		  out << '^' << _exponents[i][j];
-      
+		if (!includeVar)
+		  out << _exponents[i][j];
+		else {
+		  out << _names.getName(i);
+		  if (_exponents[i][j] != 1)
+			out << '^' << _exponents[i][j];
+		}
+
 		str = new char[out.str().size() + 1];
 		strcpy(str, out.str().c_str());
       }

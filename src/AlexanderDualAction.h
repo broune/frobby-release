@@ -20,6 +20,7 @@
 
 #include "Action.h"
 #include "IrreducibleDecomParameters.h"
+#include "IOParameters.h"
 
 class AlexanderDualAction : public Action {
  public:
@@ -35,6 +36,7 @@ class AlexanderDualAction : public Action {
 
  private:
   IrreducibleDecomParameters _decomParameters;
+  IOParameters _io;
 };
 
 #endif

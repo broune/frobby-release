@@ -21,9 +21,14 @@
 #include "BigIdeal.h"
 #include "IOFacade.h"
 #include "IrreducibleDecomFacade.h"
+#include "Scanner.h"
 
-FrobeniusAction::FrobeniusAction() {
-  _decomParameters.setUseIndependence(false);
+FrobeniusAction::FrobeniusAction():
+  _decomParameters(true),
+  _displaySolution
+("vector",
+ "Display the vector that achieves the optimal value.",
+ false) {
   _decomParameters.setSplit("frob");
 }
 
@@ -54,6 +59,8 @@ Action* FrobeniusAction::createNew() const {
 void FrobeniusAction::obtainParameters(vector<Parameter*>& parameters) {
   Action::obtainParameters(parameters);
   _decomParameters.obtainParameters(parameters);
+
+  parameters.push_back(&_displaySolution);
 }
 
 void FrobeniusAction::perform() {
@@ -61,20 +68,21 @@ void FrobeniusAction::perform() {
   BigIdeal ideal;
 
   IOFacade ioFacade(_printActions);
-  ioFacade.readFrobeniusInstanceWithGrobnerBasis(stdin, ideal, instance);
-
-  if (_decomParameters.getUseIndependence()) {
-    fputs("NOTE: Due to implementation issues, the Grobner basis\n"
-	  "based Frobenius feature using the Label algorithm does\n"
-	  "not support independence splits. They have been turned off.\n",
-	  stderr);
-    _decomParameters.setUseIndependence(false);
-  }
+  Scanner in("", stdin);
+  ioFacade.readFrobeniusInstanceWithGrobnerBasis(in, ideal, instance);
 
   IrreducibleDecomFacade facade(_printActions, _decomParameters);
 
   mpz_class frobeniusNumber;
-  facade.computeFrobeniusNumber(instance, ideal, frobeniusNumber);
+  vector<mpz_class> vector;
+  facade.computeFrobeniusNumber(instance, ideal, frobeniusNumber, vector);
+
+  if (_displaySolution) {
+	fputc('(', stdout);
+	for (size_t i = 0; i < vector.size(); ++i)
+	  gmp_fprintf(stdout, "%s%Zd", i == 0 ? "" : ", ", vector[i].get_mpz_t());
+	fputs(")\n", stdout);
+  }
 
   gmp_fprintf(stdout, "%Zd\n", frobeniusNumber.get_mpz_t());
 }

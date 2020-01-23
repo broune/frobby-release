@@ -27,6 +27,37 @@ IdealFacade::IdealFacade(bool printActions):
   Facade(printActions) {
 }
 
+void IdealFacade::deform(BigIdeal& bigIdeal) {
+  beginAction("Applying generic deformation to ideal.");
+
+  bigIdeal.deform();
+
+  // Reduce range of exponents
+  Ideal ideal(bigIdeal.getVarCount());
+  TermTranslator translator(bigIdeal, ideal, true);
+  bigIdeal.clear();
+  bigIdeal.insert(ideal);
+
+  endAction();
+}
+
+void IdealFacade::takeRadical(BigIdeal& bigIdeal) {
+  beginAction("Taking radical of ideal.");
+
+  bigIdeal.takeRadical();
+
+  Ideal ideal(bigIdeal.getVarCount());
+  TermTranslator translator(bigIdeal, ideal, true);
+  bigIdeal.clear();
+
+  ideal.minimize();
+  ideal.sortReverseLex();
+
+  bigIdeal.insert(ideal, translator);
+
+  endAction();
+}
+
 void IdealFacade::sortAllAndMinimize(BigIdeal& bigIdeal) {
   beginAction("Minimizing ideal.");
 
@@ -43,7 +74,7 @@ void IdealFacade::sortAllAndMinimize(BigIdeal& bigIdeal) {
 }
 
 void IdealFacade::sortAllAndMinimize(BigIdeal& bigIdeal, FILE* out,
-									 const char* format) {
+									 const string& format) {
   beginAction("Minimizing and writing ideal.");
 
   Ideal ideal(bigIdeal.getVarCount());
@@ -85,19 +116,23 @@ void IdealFacade::sortVariables(BigIdeal& ideal) {
   endAction();
 }
 
-void IdealFacade::printAnalysis(FILE* out, BigIdeal& ideal) {
+void IdealFacade::printAnalysis(FILE* out, BigIdeal& bigIdeal) {
   beginAction("Computing and printing analysis.");
 
-  fprintf(out, "%u generators\n", (unsigned int)ideal.getGeneratorCount());
-  fprintf(out, "%u variables\n", (unsigned int)ideal.getVarCount());
-  fflush(out);
+  fprintf(out, "%u generators\n", (unsigned int)bigIdeal.getGeneratorCount());
+  fprintf(out, "%u variables\n", (unsigned int)bigIdeal.getVarCount());
+
+  Ideal ideal(bigIdeal.getVarCount());
+  TermTranslator translator(bigIdeal, ideal, true);
+
+  fprintf(out, "is strongly generic: %s",
+		  ideal.isStronglyGeneric() ? "yes" : "no");
 
 /*
 TODO:
 
 CHEAP
 square-free
-weakly generic
 canonical
 partition
 lcm exponent vector
@@ -108,13 +143,19 @@ EXPENSIVE
 minimized
 
 MORE EXPENSIVE
-strongly generic
+weakly generic (could this be done efficiently?)
 
 VERY EXPENSIVE
 size of irreducible decomposition
-cogeneric
+strongly cogeneric
 dimension
 degree
+
+EVEN MORE EXPENSIVE
+weakly cogeneric
+
+EVEN EVEN MORE EXPENSIVE
+self Alexander dual
 
 */
 

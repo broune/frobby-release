@@ -41,14 +41,9 @@ bool Ideal::isIncomparable(const Exponent* term) const {
   const_iterator stop = _terms.end();
   for (const_iterator it = _terms.begin(); it != stop; ++it)
     if (::dominates(term, *it, _varCount) ||
-	::divides(term, *it, _varCount))
+		::divides(term, *it, _varCount))
       return false;
   return true;
-}
-
-bool Ideal::isIncomparable(const Term& term) const {
-  ASSERT(term.getVarCount() == getVarCount());
-  return isIncomparable(term.begin());
 }
 
 bool Ideal::contains(const Exponent* term) const {
@@ -59,56 +54,76 @@ bool Ideal::contains(const Exponent* term) const {
   return false;
 }
 
-bool Ideal::contains(const Term& term) const {
-  ASSERT(term.getVarCount() == getVarCount());
-  return contains(term.begin());
-}
-
-bool Ideal::strictlyContains(const Term& term) const {
-  const_iterator stop = _terms.end();
-  for (const_iterator it = _terms.begin(); it != stop; ++it)
+bool Ideal::strictlyContains(const Exponent* term) const {
+  const_iterator end = _terms.end();
+  for (const_iterator it = _terms.begin(); it != end; ++it)
     if (::strictlyDivides(*it, term, _varCount))
       return true;
   return false;
 }
 
+bool Ideal::isMinimallyGenerated() const {
+  Minimizer minimizer(_varCount);
+  return minimizer.isMinimallyGenerated(_terms.begin(), _terms.end());
+}
+
 bool Ideal::isIrreducible() const {
-  const_iterator stop = _terms.end();
-  for (const_iterator it = _terms.begin(); it != stop; ++it)
+  const_iterator end = _terms.end();
+  for (const_iterator it = _terms.begin(); it != end; ++it)
     if (getSizeOfSupport(*it, _varCount) != 1)
       return false;
   return true;
 }
 
-void Ideal::getLcm(Term& lcm) const {
-  ASSERT(lcm.getVarCount() == getVarCount());
+bool Ideal::isStronglyGeneric() {
+  for (size_t var = 0; var < _varCount; ++var) {
+	singleDegreeSort(var);
 
-  lcm.setToIdentity();
-  const_iterator stop = _terms.end();
-  for (const_iterator it = _terms.begin(); it != stop; ++it)
-    lcm.lcm(lcm, *it);
+	Exponent lastExponent = 0;
+	const_iterator end = _terms.end();
+	for (const_iterator it = _terms.begin(); it != end; ++it) {
+	  if (lastExponent != 0 && lastExponent == (*it)[var])
+		return false;
+	  lastExponent = (*it)[var];
+	}
+  }
+  return true;
 }
 
-void Ideal::getGcd(Term& gcd) const {
+void Ideal::getLcm(Exponent* lcm) const {
+  ::setToIdentity(lcm, _varCount);
+  const_iterator end = _terms.end();
+  for (const_iterator it = _terms.begin(); it != end; ++it)
+	::lcm(lcm, lcm, *it, _varCount);
+}
+
+void Ideal::getGcd(Exponent* gcd) const {
   if (_terms.empty()) {
-    gcd.setToIdentity();
+	::setToIdentity(gcd, _varCount);
     return;
   }
 
-  gcd = _terms[0];
-  const_iterator stop = _terms.end();
+  copy(_terms[0], _terms[0] + _varCount, gcd);
+  const_iterator end = _terms.end();
   const_iterator it = _terms.begin();
-  ++it;
-  for (; it != stop; ++it)
-    gcd.gcd(gcd, *it);
+  for (++it; it != end; ++it)
+    ::gcd(gcd, gcd, *it, _varCount);
 }
 
-void Ideal::getSupportCounts(Term& counts) const {
-  ASSERT(counts.getVarCount() == getVarCount());
+void Ideal::getLeastExponents(Exponent* least) const {
+  ::setToIdentity(least, _varCount);
+  
+  const_iterator end = _terms.end();
+  for (const_iterator it = _terms.begin(); it != end; ++it)
+	for (size_t var = 0; var < _varCount; ++var)
+	  if (least[var] == 0 || ((*it)[var] < least[var] && (*it)[var] > 0))
+		least[var] = (*it)[var];
+}
 
-  counts.setToIdentity();
-  const_iterator stop = end();
-  for (const_iterator it = begin(); it != stop; ++it)
+void Ideal::getSupportCounts(Exponent* counts) const {
+  ::setToIdentity(counts, _varCount);
+  const_iterator end = _terms.end();
+  for (const_iterator it = begin(); it != end; ++it)
 	for (size_t var = 0; var < _varCount; ++var)
 	  if ((*it)[var] > 0)
 		counts[var] += 1;
@@ -120,10 +135,10 @@ bool Ideal::operator==(const Ideal& ideal) const {
   if (getGeneratorCount() != ideal.getGeneratorCount())
 	return false;
 
-  const_iterator stop = end();
+  const_iterator end = _terms.end();
   const_iterator it = begin();
   const_iterator it2 = ideal.begin();
-  for (; it != stop; ++it, ++it2)
+  for (; it != end; ++it, ++it2)
 	if (!equals(*it, *it2, getVarCount()))
 	  return false;
 
@@ -139,11 +154,6 @@ void Ideal::print(FILE* file) const {
   fputs("------------\\\\\n", file);
 }
 
-void Ideal::insert(const Term& term) {
-  ASSERT(term.getVarCount() == _varCount);
-  insert(term.begin());
-}
-
 void Ideal::insert(const Exponent* exponents) {
   Exponent* term = _allocator.allocate();
   copy(exponents, exponents + _varCount, term);
@@ -152,9 +162,19 @@ void Ideal::insert(const Exponent* exponents) {
 
 void Ideal::insert(const Ideal& ideal) {
   _terms.reserve(_terms.size() + ideal._terms.size());
-  Ideal::const_iterator stop = ideal.end();
-  for (Ideal::const_iterator it = ideal.begin(); it != stop; ++it)
+  Ideal::const_iterator end = ideal.end();
+  for (Ideal::const_iterator it = ideal.begin(); it != end; ++it)
     insert(*it);
+}
+
+void Ideal::insertReminimize(const Exponent* term) {
+  ASSERT(isMinimallyGenerated());
+  if (contains(term))
+	return;
+
+  removeMultiples(term);
+  insert(term);
+  ASSERT(isMinimallyGenerated());
 }
 
 void Ideal::minimize() {
@@ -163,6 +183,7 @@ void Ideal::minimize() {
 
   Minimizer minimizer(_varCount);
   _terms.erase(minimizer.minimize(_terms.begin(), _terms.end()), _terms.end());
+  ASSERT(isMinimallyGenerated());
 }
 
 void Ideal::sortReverseLex() {
@@ -180,82 +201,47 @@ void Ideal::singleDegreeSort(size_t var) {
 	    Term::AscendingSingleDegreeComparator(var, _varCount));
 }
 
-void Ideal::colon(const Term& by) {
-  iterator stop = _terms.end();
-  for (iterator it = _terms.begin(); it != stop; ++it)
-    ::colon(*it, *it, by.begin(), _varCount);
+void Ideal::colon(const Exponent* colon) {
+  iterator end = _terms.end();
+  for (iterator it = _terms.begin(); it != end; ++it)
+    ::colon(*it, *it, colon, _varCount);
 }
 
-void Ideal::colonReminimize(const Term& by) {
-  if (by.getSizeOfSupport() == 1) {
-    size_t var = by.getFirstNonZeroExponent();
-    colonReminimize(var, by[var]);
-  } else {
-    colon(by);
-    minimize();
-  }
+bool Ideal::colonReminimize(const Exponent* colon) {
+  ASSERT(isMinimallyGenerated());
+
+  Minimizer minimizer(_varCount);
+  pair<iterator, bool> pair =
+	minimizer.colonReminimize(_terms.begin(), _terms.end(), colon);
+
+  _terms.erase(pair.first, _terms.end());
+
+  ASSERT(isMinimallyGenerated());
+  return pair.second;
 }
 
-void Ideal::colonReminimize(size_t var, Exponent exp) {
-  std::sort(_terms.begin(), _terms.end(),
-	    Term::DescendingSingleDegreeComparator(var, _varCount));
-  size_t idealSize = _terms.size();
-
-  // These can be kept without any further processing at all.
-  size_t initialBlockEnd = 0;
-  while (initialBlockEnd < idealSize &&
-	 _terms[initialBlockEnd][var] > exp) {
-    _terms[initialBlockEnd][var] -= exp; // perform colon
-    ++initialBlockEnd;
-  }
-
-  // We group terms into blocks according to term[var].
-  size_t previousBlockEnd = initialBlockEnd;
-  size_t newEnd = initialBlockEnd;
-  Exponent block = 0; // the initial value here does not actually matter
-
-  // We can start with i = 1 because the first element is always kept.
-  for (size_t i = initialBlockEnd; i < idealSize; ++i) {
-    // Detect if we are moving on to next block.
-    if (_terms[i][var] != block) {
-      block = _terms[i][var];
-      previousBlockEnd = newEnd;
-    }
-
-    // Perform colon
-    if (_terms[i][var] > exp)
-      _terms[i][var] -= exp;
-    else
-      _terms[i][var] = 0;
-
-    bool remove = false;
-
-    for (size_t j = initialBlockEnd; j < previousBlockEnd; ++j) {
-      if (::divides(_terms[j], _terms[i], _varCount)) {
-	remove = true;
-	break;
-      }
-    }
-    
-    if (!remove) {
-      _terms[newEnd] = _terms[i];
-      ++newEnd;
+void Ideal::removeMultiples(const Exponent* term) {
+  iterator newEnd = _terms.begin();
+  iterator end = _terms.end();
+  for (iterator it = _terms.begin(); it != end; ++it) {
+    if (!::divides(term, *it, _varCount)) {
+	  *newEnd = *it;
+	  ++newEnd;
     }
   }
-
-  _terms.erase(_terms.begin() + newEnd, _terms.end());
+  _terms.erase(newEnd, end);
 }
 
-void Ideal::removeStrictMultiples(const Exponent* termParam) {
-  for (size_t i = 0; i < _terms.size();) {
-    if (!::strictlyDivides(termParam, _terms[i], _varCount)) {
-      ++i;
-      continue;
+void Ideal::removeStrictMultiples(const Exponent* term) {
+  iterator newEnd = _terms.begin();
+  iterator end = _terms.end();
+  for (iterator it = _terms.begin(); it != end; ++it) {
+    if (!::strictlyDivides(term, *it, _varCount)) {
+	  *newEnd = *it;
+	  ++newEnd;
     }
-
-    std::swap(_terms[i], _terms.back());
-    _terms.erase(_terms.end() - 1);
   }
+  _terms.erase(newEnd, end);
 }
 
 void Ideal::removeDuplicates() {

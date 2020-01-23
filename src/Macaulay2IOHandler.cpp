@@ -31,7 +31,7 @@ public:
   }
 
   Macaulay2IdealWriter(FILE* file, const TermTranslator* translator):
-    IdealWriter(file, translator),
+    IdealWriter(file, translator, true),
     _justStartedWritingIdeal(true) {
     writeHeader();
   }

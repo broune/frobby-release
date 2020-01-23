@@ -21,6 +21,7 @@
 #include "BigIdeal.h"
 #include "IOFacade.h"
 #include "IntersectFacade.h"
+#include "Scanner.h"
 
 const char* IntersectAction::getName() const {
   return "intersect";
@@ -44,23 +45,23 @@ Action* IntersectAction::createNew() const {
 
 void IntersectAction::obtainParameters(vector<Parameter*>& parameters) {
   Action::obtainParameters(parameters);
+  _io.obtainParameters(parameters);
 }
 
 void IntersectAction::perform() {
+  Scanner in(_io.getInputFormat(), stdin);
+  _io.autoDetectInputFormat(in);
+  _io.validateFormats();
+
   vector<BigIdeal*> ideals;
 
   IOFacade ioFacade(_printActions);
-  ioFacade.readIdeals(stdin, ideals);
-  /*
-  if (ideals.empty()) {
-    fputs("ERROR: intersection requires at least one ideal.\n", stderr);
-    exit(1);
-	}*/
+  ioFacade.readIdeals(in, ideals);
 
   IntersectFacade facade(_printActions);
   BigIdeal* intersection = facade.intersect(ideals);
-  
-  ioFacade.writeIdeal(stdout, *intersection);
+
+  ioFacade.writeIdeal(stdout, *intersection, _io.getOutputFormat());
 
   delete intersection;
   for (size_t i = 0; i < ideals.size(); ++i)

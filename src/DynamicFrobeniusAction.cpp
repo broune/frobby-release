@@ -20,6 +20,7 @@
 
 #include "IOFacade.h"
 #include "DynamicFrobeniusFacade.h"
+#include "Scanner.h"
 
 const char* DynamicFrobeniusAction::getName() const {
   return "frobdyn";
@@ -49,7 +50,8 @@ void DynamicFrobeniusAction::perform() {
   vector<mpz_class> instance;
 
   IOFacade ioFacade(_printActions);
-  ioFacade.readFrobeniusInstance(stdin, instance);
+  Scanner in("", stdin);
+  ioFacade.readFrobeniusInstance(in, instance);
 
   mpz_class frobeniusNumber;
 

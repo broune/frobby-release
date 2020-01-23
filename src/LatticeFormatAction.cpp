@@ -22,6 +22,7 @@
 #include "IOFacade.h"
 #include "fplllIO.h"
 #include "LatticeFacade.h"
+#include "Scanner.h"
 
 LatticeFormatAction::LatticeFormatAction():
   _inputFormat
@@ -74,23 +75,24 @@ void LatticeFormatAction::perform() {
 
   IOFacade facade(_printActions);
 
-  if (!facade.isValidLatticeFormat(iformat.c_str())) {
+  if (!facade.isValidLatticeFormat(iformat)) {
     fprintf(stderr, "ERROR: Unknown input format \"%s\".\n", iformat.c_str());
     exit(1);
   }
 
-  if (!facade.isValidLatticeFormat(oformat.c_str())) {
+  if (!facade.isValidLatticeFormat(oformat)) {
     fprintf(stderr, "ERROR: Unknown output format \"%s\".\n", oformat.c_str());
     exit(1);
   }
 
   BigIdeal basis;
-  facade.readLattice(stdin, basis, iformat.c_str());
+  Scanner in(iformat, stdin);
+  facade.readLattice(in, basis);
 
   if (_zero) {
     LatticeFacade latticeFacade(_printActions);
     latticeFacade.makeZeroesInLatticeBasis(basis);
   }
 
-  facade.writeLattice(stdout, basis, oformat.c_str());
+  facade.writeLattice(stdout, basis, oformat);
 }

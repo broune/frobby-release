@@ -20,6 +20,7 @@
 
 #include "Action.h"
 #include "IrreducibleDecomParameters.h"
+#include "BoolParameter.h"
 
 class FrobeniusAction : public Action {
  public:
@@ -37,6 +38,7 @@ class FrobeniusAction : public Action {
 
  private:
   IrreducibleDecomParameters _decomParameters;
+  BoolParameter _displaySolution;
 };
 
 #endif

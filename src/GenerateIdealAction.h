@@ -19,10 +19,14 @@
 #define GENERATOR_IDEAL_ACTION_GUARD
 
 #include "Action.h"
-#include "GenerateIdealParameters.h"
+#include "StringParameter.h"
+#include "IntegerParameter.h"
+#include "IOParameters.h"
 
 class GenerateIdealAction : public Action {
  public:
+  GenerateIdealAction();
+
   virtual const char* getName() const;
   virtual const char* getShortDescription() const;
   virtual const char* getDescription() const;
@@ -34,7 +38,13 @@ class GenerateIdealAction : public Action {
   virtual void perform();
 
  private:
-  GenerateIdealParameters _parameters;
+  StringParameter _type;
+
+  IntegerParameter _variableCount;
+  IntegerParameter _generatorCount;
+  IntegerParameter _exponentRange;
+
+  IOParameters _io;
 };
 
 #endif

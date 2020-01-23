@@ -34,27 +34,31 @@ class IrreducibleDecomFacade : private Facade {
   IrreducibleDecomFacade(bool printActions,
 			 const IrreducibleDecomParameters& parameters);
 
+  void printLabels(BigIdeal& ideal, FILE* out, const string& format);
+
   // These all clear ideal.
-  void computeIrreducibleDecom(BigIdeal& ideal, FILE* out);
-  void computeAlexanderDual(BigIdeal& ideal, FILE* out);
+  void computeIrreducibleDecom(BigIdeal& ideal, FILE* out, const string& format);
+  void computeAlexanderDual(BigIdeal& ideal, FILE* out, const string& format);
   void computeAlexanderDual(BigIdeal& ideal,
-							const vector<mpz_class>& point, FILE* out);
+							const vector<mpz_class>& point, FILE* out,
+							const string& format);
   void computeFrobeniusNumber(const vector<mpz_class>& instance,
-			      BigIdeal& ideal, 
-			      mpz_class& frobeniusNumber);
+							  BigIdeal& ideal, 
+							  mpz_class& frobeniusNumber,
+							  vector<mpz_class>& vector);
 
   void computeIrreducibleDecom(Ideal& ideal, TermConsumer* consumer);
 
  private:
   void computeIrreducibleDecom(Ideal& ideal,
 							   TermConsumer* consumer,
-							   bool preMinimized );
+							   bool preMinimized);
   void computeAlexanderDual(BigIdeal& ideal,
 							const vector<mpz_class>& point,
 							bool useLcm,
-							FILE* out);
+							FILE* out,
+							const string& format);
 
-  void runLabelAlgorithm(Ideal& ideal, Strategy* strategy);
   void runSliceAlgorithm(Ideal& ideal, SliceStrategy* strategy);
 
   const IrreducibleDecomParameters& _parameters;

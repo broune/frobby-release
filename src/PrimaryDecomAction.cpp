@@ -20,7 +20,6 @@
 
 #include "BigIdeal.h"
 #include "IOFacade.h"
-#include "PrimaryDecomFacade.h"
 
 const char* PrimaryDecomAction::getName() const {
   return "primdecom";
@@ -31,11 +30,7 @@ const char* PrimaryDecomAction::getShortDescription() const {
 }
 
 const char* PrimaryDecomAction::getDescription() const {
-  return
-    "Computes the primary decomposition of monomial ideals using\n"
-    "the Uwe algorithm.\n"
-    "\n"
-    "Do note that this operation is currently implemented in a slow way.\n";
+  return "TODO";
 }
 
 Action* PrimaryDecomAction::createNew() const {
@@ -47,10 +42,5 @@ void PrimaryDecomAction::obtainParameters(vector<Parameter*>& parameters) {
 }
 
 void PrimaryDecomAction::perform() {
-  BigIdeal ideal;
-  IOFacade ioFacade(_printActions);
-  ioFacade.readIdeal(stdin, ideal);
-
-  PrimaryDecomFacade facade(_printActions);
-  facade.computePrimaryDecom(ideal, stdout);
+  // TODO
 }

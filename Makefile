@@ -1,23 +1,17 @@
 # ***** Variables
 
-labelSources = TermTree.cpp Strategy.cpp PrintDebugStrategy.cpp	\
-  FrobeniusStrategy.cpp BenchmarkStrategy.cpp			\
-  DecompositionStrategy.cpp StatisticsStrategy.cpp		\
-  CompositeStrategy.cpp PrintProgressStrategy.cpp		\
-  SkipRedundantStrategy.cpp LabelAlgorithm.cpp OldPartition.cpp
-
-rawSources = $(patsubst %, label/%, $(labelSources))					\
-  main.cpp Action.cpp													\
+rawSources =															\
+  main.cpp Action.cpp IOParameters.cpp									\
   IrreducibleDecomAction.cpp fplllIO.cpp IOHandler.cpp fourti2.cpp		\
   randomDataGenerators.cpp MonosIOHandler.cpp BigIdeal.cpp				\
-  FormatAction.cpp														\
+  TransformAction.cpp													\
   Macaulay2IOHandler.cpp NewMonosIOHandler.cpp HelpAction.cpp			\
   stdinc.cpp DynamicFrobeniusAction.cpp dynamicFrobeniusAlgorithm.cpp	\
   GenerateIdealAction.cpp GenerateFrobeniusAction.cpp					\
   IrreducibleDecomFacade.cpp FrobeniusAction.cpp Facade.cpp				\
-  IOFacade.cpp DynamicFrobeniusFacade.cpp RandomDataFacade.cpp			\
+  IOFacade.cpp DynamicFrobeniusFacade.cpp GenerateDataFacade.cpp		\
   AnalyzeAction.cpp IdealFacade.cpp Parameter.cpp						\
-  ParameterGroup.cpp GenerateIdealParameters.cpp IntegerParameter.cpp	\
+  ParameterGroup.cpp IntegerParameter.cpp								\
   IrreducibleDecomParameters.cpp BoolParameter.cpp						\
   Scanner.cpp Partition.cpp StringParameter.cpp Term.cpp				\
   TermTranslator.cpp Timer.cpp VarNames.cpp LatticeFormatAction.cpp		\
@@ -27,7 +21,7 @@ rawSources = $(patsubst %, label/%, $(labelSources))					\
   PrimaryDecomAction.cpp Slice.cpp										\
   IndependenceSplitter.cpp Projection.cpp								\
   SliceStrategy.cpp lattice.cpp											\
-  LatticeFacade.cpp PrimaryDecomFacade.cpp DecomRecorder.cpp			\
+  LatticeFacade.cpp DecomRecorder.cpp									\
   TermGrader.cpp Fourti2IOHandler.cpp NullIOHandler.cpp Minimizer.cpp	\
   AlexanderDualAction.cpp
 
@@ -75,7 +69,7 @@ all: bin/$(program) $(outdir)$(program)
 ifeq ($(MODE), profile)
 	rm -f gmon.out
 	./bench
-	gprof ./frobby > prof
+	gprof bin/frobby > prof
 endif
 
 test: all

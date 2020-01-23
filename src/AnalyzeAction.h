@@ -20,6 +20,7 @@
 
 #include "Action.h"
 #include "BoolParameter.h"
+#include "IOParameters.h"
 
 class AnalyzeAction : public Action {
  public:
@@ -36,7 +37,9 @@ class AnalyzeAction : public Action {
   virtual void perform();
 
  private:
+  IOParameters _io;
   BoolParameter _printLcm;
+  BoolParameter _printLabels;
 };
 
 #endif

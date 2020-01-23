@@ -19,6 +19,7 @@
 #define INTERSECT_ACTION_GUARD
 
 #include "Action.h"
+#include "IOParameters.h"
 
 class IntersectAction : public Action {
  public:
@@ -31,6 +32,9 @@ class IntersectAction : public Action {
   virtual void obtainParameters(vector<Parameter*>& parameters);
 
   virtual void perform();
+
+ private:
+  IOParameters _io;
 };
 
 #endif

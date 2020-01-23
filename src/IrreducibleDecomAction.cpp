@@ -21,6 +21,7 @@
 #include "BigIdeal.h"
 #include "IrreducibleDecomFacade.h"
 #include "IOFacade.h"
+#include "Scanner.h"
 
 const char* IrreducibleDecomAction::getName() const {
   return "irrdecom";
@@ -45,14 +46,19 @@ Action* IrreducibleDecomAction::createNew() const {
 void IrreducibleDecomAction::obtainParameters(vector<Parameter*>& parameters) {
   Action::obtainParameters(parameters);
   _decomParameters.obtainParameters(parameters);
+  _io.obtainParameters(parameters);
 }
 
 void IrreducibleDecomAction::perform() {
+  Scanner in(_io.getInputFormat(), stdin);
+  _io.autoDetectInputFormat(in);
+  _io.validateFormats();
+
   BigIdeal ideal;
 
   IOFacade ioFacade(_printActions);
-  ioFacade.readIdeal(stdin, ideal);
+  ioFacade.readIdeal(in, ideal);
 
   IrreducibleDecomFacade facade(_printActions, _decomParameters);
-  facade.computeIrreducibleDecom(ideal, stdout);
+  facade.computeIrreducibleDecom(ideal, stdout, _io.getOutputFormat());
 }

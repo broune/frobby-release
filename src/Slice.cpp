@@ -26,7 +26,7 @@ Slice::Slice():
 }
 
 Slice::Slice(const Ideal& ideal, const Ideal& subtract,
-	     const Term& multiply):
+			 const Term& multiply):
   _varCount(multiply.getVarCount()),
   _multiply(multiply),
   _lcm(multiply.getVarCount()),
@@ -42,7 +42,7 @@ const Term& Slice::getLcm() const {
 #ifdef DEBUG
   if (_lcmUpdated) {
     Term tmp(_varCount);
-    _ideal.getLcm(tmp);
+	_ideal.getLcm(tmp);
     ASSERT(tmp == _lcm);
   }
 #endif
@@ -97,22 +97,26 @@ void Slice::swap(Slice& slice) {
   _subtract.swap(slice._subtract);
 }
 
-void Slice::innerSlice(const Term& pivot) {
+bool Slice::innerSlice(const Term& pivot) {
   ASSERT(getVarCount() == pivot.getVarCount());
 
   size_t size = _ideal.getGeneratorCount();
 
-  _ideal.colonReminimize(pivot);
-  _subtract.colonReminimize(pivot);
   _multiply.product(_multiply, pivot);
-  normalize();
+  bool idealChanged = _ideal.colonReminimize(pivot);
+  bool subtractChanged = _subtract.colonReminimize(pivot);
+  bool changed = idealChanged || subtractChanged;
+  if (changed) {
+	normalize();
+	_lowerBoundHint = pivot.getFirstNonZeroExponent();
+  }
 
   if (_ideal.getGeneratorCount() == size)
     _lcm.colon(_lcm, pivot);
   else
     _lcmUpdated = false;
 
-  _lowerBoundHint = pivot.getFirstNonZeroExponent();
+  return changed;
 }
 
 void Slice::outerSlice(const Term& pivot) {
@@ -166,9 +170,11 @@ bool Slice::baseCase(TermConsumer* consumer) {
 }
 
 void Slice::simplify() {
+  ASSERT(!normalize());
+
   removeDoubleLcm();
   while (applyLowerBound() &&
-	 removeDoubleLcm())
+		 removeDoubleLcm())
     ;
 
   pruneSubtract();
@@ -256,9 +262,9 @@ public:
     bool seenMatch = false;
     for (size_t var = 0; var < _lcm.getVarCount(); ++var) {
       if (term[var] == _lcm[var]) {
-	if (seenMatch)
-	  return true;
-	seenMatch = true;
+		if (seenMatch)
+		  return true;
+		seenMatch = true;
       }
     }
     return false;
@@ -286,6 +292,14 @@ bool Slice::removeDoubleLcm() {
   return removedAny;
 }
 
+void Slice::applyTrivialLowerBound() {
+  Term bound(_varCount);
+  _ideal.getLeastExponents(bound);
+  bound.decrement();
+  if (!bound.isIdentity())
+	innerSlice(bound);
+}
+
 bool Slice::applyLowerBound() {
   if (_ideal.getGeneratorCount() == 0)
     return false;
@@ -301,24 +315,10 @@ bool Slice::applyLowerBound() {
       return true;
     }
 
-    size_t sizeOfSupport = bound.getSizeOfSupport();
-    if (sizeOfSupport > 0) {
-      if (sizeOfSupport == 1 &&
-	  bound.getFirstNonZeroExponent() == var &&
-	  isTrivialColon(var, bound[var])) {
-	// In this case, there is no need for reminimization or
-	// re-lower-bounding of this variable.
-	_ideal.colon(bound);
-	_subtract.colon(bound);
-	_multiply.product(_multiply, bound);
-	_lcm.colon(_lcm, bound);
-	++stepsWithNoChange;
-      } else {
-	innerSlice(bound);
-	stepsWithNoChange = 0;
-	changed = true;
-      }
-    } else
+	if (!bound.isIdentity() && innerSlice(bound)) {
+	  changed = true;
+	  stepsWithNoChange = 0;
+	} else
       ++stepsWithNoChange;
 
     var = (var + 1) % _varCount;
@@ -342,8 +342,8 @@ bool Slice::getLowerBound(Term& bound, size_t var) const {
     bool relevant = true;
     for (size_t var2 = 0; var2 < _varCount; ++var2) {
       if (var2 != var && (*it)[var2] == lcm[var2]) {
-	relevant = false;
-	break;
+		relevant = false;
+		break;
       }
     }
     
@@ -500,9 +500,9 @@ bool Slice::twoNonMaxBaseCase(TermConsumer* consumer) {
 
     for (size_t var2 = 0; var2 < _varCount; ++var2) {
       if (var1 == var2 || nonMax2[var2] == 0)
-	continue;
+		continue;
       if (nonMax2[var2] <= nonMax1[var2])
-	continue;
+		continue;
       
       // Use tmp to record those variables for which labels have been
       // found. If some variable has no label, then we are not dealing
@@ -511,26 +511,26 @@ bool Slice::twoNonMaxBaseCase(TermConsumer* consumer) {
       tmp[var1] = true;
       tmp[var2] = true;
       for (Ideal::const_iterator it = getIdeal().begin(); it != stop; ++it) {
-	if ((*it)[var1] >= nonMax1[var1] ||
-	    (*it)[var2] >= nonMax2[var2])
-	  continue;
+		if ((*it)[var1] >= nonMax1[var1] ||
+			(*it)[var2] >= nonMax2[var2])
+		  continue;
 
-	for (size_t var = 0; var < lcm.getVarCount(); ++var) {
-	  if ((*it)[var] == lcm[var]) {
-	    tmp[var] = true;
-	    break;
-	  }
-	}
+		for (size_t var = 0; var < lcm.getVarCount(); ++var) {
+		  if ((*it)[var] == lcm[var]) {
+			tmp[var] = true;
+			break;
+		  }
+		}
       }
 
       if (tmp.getSizeOfSupport() < _varCount)
-	continue;
+		continue;
       
       msm[var1] = nonMax1[var1] - 1;
       msm[var2] = nonMax2[var2] - 1;
       if (!getSubtract().contains(msm)) {
-	tmp.product(msm, _multiply);
-	consumer->consume(tmp);
+		tmp.product(msm, _multiply);
+		consumer->consume(tmp);
       }
       msm[var2] = lcm[var2] - 1;
       msm[var1] = lcm[var1] - 1;
@@ -553,20 +553,6 @@ bool Slice::twoNonMaxBaseCase(TermConsumer* consumer) {
     }
     msm[var] = lcm[var] - 1;
   }
-
-  return true;
-}
-
-bool Slice::isTrivialColon(size_t var, size_t exponent) {
-  Ideal::const_iterator stop = _ideal.end();
-  for (Ideal::const_iterator it = getIdeal().begin(); it != stop; ++it)
-    if (0 < (*it)[var] && (*it)[var] <= exponent)
-      return false;
-
-  stop = _subtract.end();
-  for (Ideal::const_iterator it = _subtract.begin(); it != stop; ++it)
-    if (0 < (*it)[var] && (*it)[var] <= exponent)
-      return false;
 
   return true;
 }

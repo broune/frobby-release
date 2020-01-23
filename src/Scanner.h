@@ -19,11 +19,16 @@
 #define SCANNER_GUARD
 
 class VarNames;
+class IOHandler;
 
 class Scanner {
 public:
-  Scanner(FILE* in);
+  Scanner(const string& formatName, FILE* in);
   ~Scanner();
+
+  const string& getFormat() const;
+  void setFormat(const string& format);
+  IOHandler* getIOHandler() const;
 
   bool match(char c);
   bool matchEOF();
@@ -49,6 +54,9 @@ public:
   // Writes "ERROR (line ?):" to standard error
   void printError();
 
+  int peek();
+  void eatWhite();
+
 private:
   // returns size
   size_t readIntegerString();
@@ -56,11 +64,7 @@ private:
 
   int getChar();
 
-  int peek();
-
   void error(const string& expected);
-
-  void eatWhite();
 
   void growTmpString();
 
@@ -71,6 +75,8 @@ private:
 
   char* _tmpString;
   size_t _tmpStringCapacity;
+
+  string _formatName;
 };
 
 #endif

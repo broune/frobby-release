@@ -21,6 +21,7 @@
 #include "BigIdeal.h"
 #include "IrreducibleDecomFacade.h"
 #include "IOFacade.h"
+#include "Scanner.h"
 
 const char* AlexanderDualAction::getName() const {
   return "alexdual";
@@ -45,19 +46,25 @@ Action* AlexanderDualAction::createNew() const {
 void AlexanderDualAction::obtainParameters(vector<Parameter*>& parameters) {
   Action::obtainParameters(parameters);
   _decomParameters.obtainParameters(parameters);
+  _io.obtainParameters(parameters);
 }
 
 void AlexanderDualAction::perform() {
+  Scanner in(_io.getInputFormat(), stdin);
+  _io.autoDetectInputFormat(in);
+  _io.validateFormats();
+
   BigIdeal ideal;
   vector<mpz_class> point;
 
   IOFacade ioFacade(_printActions);
   bool pointSpecified =
-	ioFacade.readAlexanderDualInstance(stdin, ideal, point);
+	ioFacade.readAlexanderDualInstance(in, ideal, point);
 
   IrreducibleDecomFacade facade(_printActions, _decomParameters);
   if (pointSpecified)
-	facade.computeAlexanderDual(ideal, point, stdout);
+	facade.computeAlexanderDual(ideal, point, stdout,
+								_io.getOutputFormat());
   else
-	facade.computeAlexanderDual(ideal, stdout);
+	facade.computeAlexanderDual(ideal, stdout, _io.getOutputFormat());
 }

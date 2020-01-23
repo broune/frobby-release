@@ -30,7 +30,7 @@ IOFacade::IOFacade(bool printActions):
   Facade(printActions) {
 }
 
-bool IOFacade::isValidMonomialIdealFormat(const char* format) {
+bool IOFacade::isValidMonomialIdealFormat(const string& format) {
   beginAction("Validating monomial ideal format name.");
 
   IOHandler* handler = IOHandler::getIOHandler(format);
@@ -41,29 +41,26 @@ bool IOFacade::isValidMonomialIdealFormat(const char* format) {
   return valid;
 }
 
-void IOFacade::readIdeal(FILE* in, BigIdeal& ideal, const char* format) {
+void IOFacade::readIdeal(Scanner& in, BigIdeal& ideal) {
   beginAction("Reading monomial ideal.");
 
-  IOHandler* handler = IOHandler::getIOHandler(format);
+  IOHandler* handler = in.getIOHandler();
   ASSERT(handler != 0);
 
-  Scanner scanner(in);
-  handler->readIdeal(scanner, ideal);
+  handler->readIdeal(in, ideal);
 
   endAction();
 }
 
-void IOFacade::readIdeals(FILE* in, vector<BigIdeal*>& ideals,
-						  const char* format) {
+void IOFacade::readIdeals(Scanner& in, vector<BigIdeal*>& ideals) {
   beginAction("Reading monomial ideals.");
 
-  IOHandler* handler = IOHandler::getIOHandler(format);
+  IOHandler* handler = in.getIOHandler();
   ASSERT(handler != 0);
 
-  Scanner scanner(in);
-  while (!scanner.matchEOF()) {
+  while (handler->hasMoreInput(in)) {
     BigIdeal* ideal = new BigIdeal();
-	handler->readIdeal(scanner, *ideal);
+	handler->readIdeal(in, *ideal);
     ideals.push_back(ideal);
   }
 
@@ -71,7 +68,7 @@ void IOFacade::readIdeals(FILE* in, vector<BigIdeal*>& ideals,
 }
 
 
-void IOFacade::writeIdeal(FILE* out, BigIdeal& ideal, const char* format) {
+void IOFacade::writeIdeal(FILE* out, BigIdeal& ideal, const string& format) {
   beginAction("Writing monomial ideal.");
 
   IOHandler* handler = IOHandler::getIOHandler(format);
@@ -83,18 +80,17 @@ void IOFacade::writeIdeal(FILE* out, BigIdeal& ideal, const char* format) {
 }
 
 bool IOFacade::readAlexanderDualInstance
-(FILE* in, BigIdeal& ideal, vector<mpz_class>& term, const char* format) {
+(Scanner& in, BigIdeal& ideal, vector<mpz_class>& term) {
   beginAction("Reading Alexander dual input.");
 
-  IOHandler* handler = IOHandler::getIOHandler(format);
+  IOHandler* handler = in.getIOHandler();
   ASSERT(handler != 0);
 
-  Scanner scanner(in);
-  handler->readIdeal(scanner, ideal);
+  handler->readIdeal(in, ideal);
 
   bool pointSpecified = false;
-  if (!scanner.matchEOF()) {
-	handler->readTerm(scanner, ideal.getNames(), term);
+  if (handler->hasMoreInput(in)) {
+	handler->readTerm(in, ideal.getNames(), term);
 	pointSpecified = true;
   }
 
@@ -104,31 +100,29 @@ bool IOFacade::readAlexanderDualInstance
 }
 
 void IOFacade::
-readFrobeniusInstance(FILE* in, vector<mpz_class>& instance) {
+readFrobeniusInstance(Scanner& in, vector<mpz_class>& instance) {
   beginAction("Reading Frobenius instance.");
 
-  Scanner scanner(in);
-  ::readFrobeniusInstance(scanner, instance);
+  ::readFrobeniusInstance(in, instance);
 
   endAction();
 }
 
 void IOFacade::readFrobeniusInstanceWithGrobnerBasis
-(FILE* in, BigIdeal& ideal, vector<mpz_class>& instance) {
+(Scanner& in, BigIdeal& ideal, vector<mpz_class>& instance) {
   beginAction("Reading frobenius instance with Grobner basis.");
 
-  Scanner scanner(in);
-  fourti2::readGrobnerBasis(scanner, ideal);
-  ::readFrobeniusInstance(scanner, instance);
+  fourti2::readGrobnerBasis(in, ideal);
+  ::readFrobeniusInstance(in, instance);
 
   if (instance.size() != ideal.getVarCount() + 1) {
     if (instance.empty())
       fputs("ERROR: There is no Frobenius instance at end of input.\n",
-	    stderr);
+			stderr);
     else
       fputs("ERROR: The Frobenius instance at end of input does not have the\n"
-	    "amount of numbers that the first part of the input indicates.\n",
-	    stderr);
+			"amount of numbers that the first part of the input indicates.\n",
+			stderr);
     exit(1);
   }
 
@@ -149,12 +143,10 @@ writeFrobeniusInstance(FILE* out, vector<mpz_class>& instance) {
   endAction();
 }
 
-bool IOFacade::isValidLatticeFormat(const char* format) {
+bool IOFacade::isValidLatticeFormat(const string& format) {
   beginAction("Validating lattice format name.");
 
-  bool valid =
-    strcmp(format, "4ti2") == 0 ||
-    strcmp(format, "fplll") == 0;
+  bool valid = (format == "4ti2" || format == "fplll");
 
   endAction();
 
@@ -162,14 +154,13 @@ bool IOFacade::isValidLatticeFormat(const char* format) {
 }
 
 void IOFacade::
-readLattice(FILE* in, BigIdeal& ideal, const char* format) {
+readLattice(Scanner& in, BigIdeal& ideal) {
   beginAction("Reading lattice basis.");
 
-  Scanner scanner(in);
-  if (strcmp(format, "4ti2") == 0)
-    fourti2::readLatticeBasis(scanner, ideal);
-  else if (strcmp(format, "fplll") == 0)
-    fplll::readLatticeBasis(scanner, ideal);
+  if (in.getFormat() == "4ti2")
+    fourti2::readLatticeBasis(in, ideal);
+  else if (in.getFormat() == "fplll")
+    fplll::readLatticeBasis(in, ideal);
   else
     ASSERT(false);
 
@@ -177,12 +168,12 @@ readLattice(FILE* in, BigIdeal& ideal, const char* format) {
 }
 
 void IOFacade::
-writeLattice(FILE* out, const BigIdeal& ideal, const char* format) {
+writeLattice(FILE* out, const BigIdeal& ideal, const string& format) {
   beginAction("Writing lattice basis.");
 
-  if (strcmp(format, "4ti2") == 0)
+  if (format == "4ti2")
     fourti2::writeLatticeBasis(out, ideal);
-  else if (strcmp(format, "fplll") == 0)
+  else if (format == "fplll")
     fplll::writeLatticeBasis(out, ideal);
   else
     ASSERT(false);

@@ -17,50 +17,70 @@
 #include "stdinc.h"
 #include "Term.h"
 
+#include <sstream>
+#include <vector>
+
 const unsigned int PoolCount = 50;
 const unsigned int ObjectPoolSize = 1000;
 
-struct ObjectPool {
-  ObjectPool(): objectsStored(0), objects(0) {}
+Term::Term(const string& str):
+  _exponents(0), _varCount(0) {
+  istringstream in(str);
 
-  void ensureInit() {
-	if (objects == 0)
-	  objects = new Exponent*[ObjectPoolSize];
+  vector<Exponent> exponents;
+  mpz_class ex;
+  while (in >> ex) {
+	ASSERT(ex.fits_uint_p());
+	exponents.push_back(ex.get_ui());
   }
 
-  bool empty() const {
-    return objectsStored == 0;
-  }
+  if (!exponents.empty())
+	initialize(&(exponents[0]), exponents.size());
+}
 
-  bool canStoreMore() const {
-    return objectsStored < ObjectPoolSize;
-  }
+namespace {
+  struct ObjectPool {
+	ObjectPool(): objectsStored(0), objects(0) {}
 
-  Exponent* removeObject() {
-    ASSERT(!empty());
-    --objectsStored;
-    return objects[objectsStored];
-  }
+	void ensureInit() {
+	  if (objects == 0)
+		objects = new Exponent*[ObjectPoolSize];
+	}
 
-  void addObject(Exponent* object) {
-    ASSERT(canStoreMore());
-	ASSERT(objects != 0);
+	bool empty() const {
+	  return objectsStored == 0;
+	}
 
-    objects[objectsStored] = object;
-    ++objectsStored;
-  }
+	bool canStoreMore() const {
+	  return objectsStored < ObjectPoolSize;
+	}
 
-  ~ObjectPool() {
-    if (objects == 0)
-      return;
-    for (size_t i = 0; i < objectsStored; ++i)
-      delete[] objects[i];
-    delete[] objects;
-  }
+	Exponent* removeObject() {
+	  ASSERT(!empty());
+	  --objectsStored;
+	  return objects[objectsStored];
+	}
 
-  unsigned int objectsStored;
-  Exponent** objects;
-} pools[PoolCount];
+	void addObject(Exponent* object) {
+	  ASSERT(canStoreMore());
+	  ASSERT(objects != 0);
+
+	  objects[objectsStored] = object;
+	  ++objectsStored;
+	}
+
+	~ObjectPool() {
+	  if (objects == 0)
+		return;
+	  for (size_t i = 0; i < objectsStored; ++i)
+		delete[] objects[i];
+	  delete[] objects;
+	}
+
+	unsigned int objectsStored;
+	Exponent** objects;
+  } pools[PoolCount];
+}
 
 Exponent* Term::allocate(size_t size) {
   ASSERT(size > 0);
@@ -85,3 +105,21 @@ void Term::deallocate(Exponent* p, size_t size) {
   else
     delete[] p;
 }
+
+void Term::print(FILE* file, const Exponent* e, size_t varCount) {
+  ostringstream out;
+  print(out, e, varCount);
+  fputs(out.str().c_str(), file);
+}
+
+void Term::print(ostream& out, const Exponent* e, size_t varCount) {
+	ASSERT(e != 0 || varCount == 0);
+
+	out << '(';
+	for (size_t var = 0; var < varCount; ++var) {
+	  if (var != 0)
+		out << ", ";
+	  out << e[var];
+	}
+	out << ')';
+  }

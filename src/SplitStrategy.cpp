@@ -22,6 +22,7 @@
 #include "Ideal.h"
 #include "NameFactory.h"
 #include "error.h"
+#include "TermGrader.h"
 
 SplitStrategy::SplitStrategy() {
 }
@@ -29,13 +30,18 @@ SplitStrategy::SplitStrategy() {
 SplitStrategy::~SplitStrategy() {
 }
 
-// This common base class provides code that is useful for writing
-// pivot split strategies.
+/** This common base class provides code that is useful for writing
+ pivot split strategies.
+*/
 class SplitStrategyCommon : public SplitStrategy {
 public:
   virtual void getPivot(Term& pivot, Slice& slice) const {
 	ASSERT(false);
 	reportInternalError("Requested pivot split of non-pivot split strategy.\n");
+  }
+
+  virtual void getPivot(Term& pivot, Slice& slice, const TermGrader& grader) const {
+	getPivot(pivot, slice);
   }
 
   virtual size_t getLabelSplitVariable(const Slice& slice) const {
@@ -49,10 +55,6 @@ public:
   }
 
   virtual bool isLabelSplit() const {
-	return false;
-  }
-
-  virtual bool isFrobeniusSplit() const {
 	return false;
   }
 
@@ -89,9 +91,10 @@ protected:
 	  if (co[var] < maxCount)
 		co[var] = 0;
 
-	// Choose a deterministically random variable among those that are
-	// best. This helps to avoid getting into a bad pattern.
-	return co.getFirstNonZeroExponent();
+	// Choose the middle variable among those that are best. This
+	// is better at avoiding a bad pattern than just choosing the
+	// first one.
+	return co.getMiddleNonZeroExponent();
   }
 };
 
@@ -105,6 +108,8 @@ protected:
 
   mutable Term _oneCounts;
   void setOneCounts(const Slice& slice) const {
+	ASSERT(!const_cast<Slice&>(slice).adjustMultiply());
+	ASSERT(!const_cast<Slice&>(slice).baseCase(false));
 	// For each variable, count number of terms with exponent equal to 1,
 	// not counting pure powers.
 	_oneCounts.reset(slice.getVarCount());
@@ -112,7 +117,7 @@ protected:
 	Ideal::const_iterator end = slice.getIdeal().end();
 	for (Ideal::const_iterator it = slice.getIdeal().begin();
 		 it != end; ++it) {
-	  if (getSizeOfSupport(*it, slice.getVarCount()) == 1)
+	  if (Term::getSizeOfSupport(*it, slice.getVarCount()) == 1)
 		continue; // Not counting pure powers.
 	  for (size_t var = 0; var < slice.getVarCount(); ++var)
 		if ((*it)[var] == 1)
@@ -155,7 +160,6 @@ public:
 
   virtual size_t getLabelSplitVariable(const Slice& slice) const {
 	setOneCounts(slice);
-
 	for (size_t var = 0; ; ++var) {
 		ASSERT(var < slice.getVarCount());
 		if (_oneCounts[var] > 0)
@@ -362,13 +366,13 @@ public:
 	Ideal::const_iterator end = slice.getIdeal().end();
 	for (Ideal::const_iterator it = slice.getIdeal().begin();
 		 it != end; ++it)
-	  if (!::isSquareFree(*it, slice.getVarCount()))
+	  if (!Term::isSquareFree(*it, slice.getVarCount()))
 		++nonSquareFreeCount;
 	
 	size_t selected = rand() % nonSquareFreeCount;
 	for (Ideal::const_iterator it = slice.getIdeal().begin(); ; ++it) {
 	  ASSERT(it != end);
-	  if (::isSquareFree(*it, slice.getVarCount()))
+	  if (Term::isSquareFree(*it, slice.getVarCount()))
 		continue;
 	  
 	  if (selected == 0) {
@@ -382,22 +386,88 @@ public:
   }
 };
 
-class FrobeniusSplit : public PivotSplit {
+class DegreeSplit : public PivotSplit {
 public:
   virtual const char* getName() const {
 	return staticGetName();
   }
 
   static const char* staticGetName() {
-	return "frob";
-  }
-
-  virtual bool isFrobeniusSplit() const {
-	return true;
+	return "degree";
   }
 
   virtual void getPivot(Term& pivot, Slice& slice) const {
 	reportInternalError("Called getPivot directly on FrobeniusSplit.");
+  }
+
+  virtual void getPivot(Term& pivot, Slice& slice, const TermGrader& grader) const {
+	const Term& lcm = slice.getLcm();
+
+	// TODO: pick a middle variable in case of ties.
+
+	_maxDiff = -1;
+	size_t maxOffset = 0u;
+	for (size_t var = 0; var < slice.getVarCount(); ++var) {
+	  if (lcm[var] <= 1)
+		continue;
+
+	  Exponent base = slice.getMultiply()[var];
+	  Exponent mid = base + lcm[var] / 2;
+
+	  // We could be looking at an added pure power whose exponent is
+	  // defined to have degree 0. We don't want to look at that.
+	  if (mid == grader.getMaxExponent(var) && mid > base)
+		--mid;
+
+	  _diff = grader.getGrade(var, mid) - grader.getGrade(var, base);
+		
+	  if (grader.getGradeSign(var) < 0)
+		_diff = -_diff;
+	  
+	  ASSERT(_diff >= 0 || base == mid);
+
+	  if (_diff > _maxDiff) {
+		maxOffset = var;
+		_maxDiff = _diff;
+	  }
+	}
+
+	pivot.setToIdentity();
+	pivot[maxOffset] = lcm[maxOffset] / 2;
+  }
+
+private:
+  /** This is member variable used by getPivot. It has been made a
+	  field of the object to avoid having to reinitialize the object with
+	  each call.
+  */ 
+  mutable mpz_class _maxDiff;
+
+  /** This is member variable used by getPivot. It has been made a
+	  field of the object to avoid having to reinitialize the object with
+	  each call.
+  */ 
+  mutable mpz_class _diff;
+};
+
+/** This class is deprecated and is only here to create the alias
+ "frob" for the degree split.
+*/
+class DeprecatedFrobeniusSplit : public DegreeSplit {
+public:
+  DeprecatedFrobeniusSplit() {
+	displayNote
+	  ("The split selection strategy \"frob\" is deprecated and will be "
+	   "removed in a future version of Frobby. Use the name \"degree\" "
+	   "to achieve the same thing.");
+  }
+
+  virtual const char* getName() const {
+	return staticGetName();
+  }
+
+  static const char* staticGetName() {
+	return "frob";
   }
 };
 
@@ -416,7 +486,8 @@ namespace {
 	nameFactoryRegister<MinGenSplit>(factory);
 	nameFactoryRegister<IndependencePivotSplit>(factory);
 	nameFactoryRegister<GcdSplit>(factory);
-	nameFactoryRegister<FrobeniusSplit>(factory);
+	nameFactoryRegister<DegreeSplit>(factory);
+	nameFactoryRegister<DeprecatedFrobeniusSplit>(factory);
 
 	return factory;
   }

@@ -22,7 +22,8 @@
 
 SliceStrategyCommon::SliceStrategyCommon(const SplitStrategy* splitStrategy):
   _split(splitStrategy),
-  _useIndependence(true) {
+  _useIndependence(true),
+  _useSimplification(true) {
   ASSERT(splitStrategy != 0);
 }
 
@@ -32,6 +33,10 @@ SliceStrategyCommon::~SliceStrategyCommon() {
 	delete _sliceCache.back();
 	_sliceCache.pop_back();
   }
+}
+
+bool SliceStrategyCommon::processIfBaseCase(Slice& slice) {
+  return slice.baseCase(getUseSimplification());
 }
 
 void SliceStrategyCommon::freeSlice(auto_ptr<Slice> slice) {
@@ -44,6 +49,20 @@ void SliceStrategyCommon::freeSlice(auto_ptr<Slice> slice) {
 
 void SliceStrategyCommon::setUseIndependence(bool use) {
   _useIndependence = use;
+}
+
+void SliceStrategyCommon::setUseSimplification(bool use) {
+  _useSimplification = use;
+}
+
+bool SliceStrategyCommon::simplify(Slice& slice) {
+  if (getUseSimplification())
+	return slice.simplify();
+  else if (_split->isLabelSplit()) {
+	// The label split code requires at least this simplification.
+	return slice.adjustMultiply(); 
+  }
+  return false;
 }
 
 auto_ptr<Slice> SliceStrategyCommon::newSlice() {
@@ -78,12 +97,12 @@ void SliceStrategyCommon::pivotSplit(auto_ptr<Slice> slice,
   leftSlice = newSlice();
   *leftSlice = *slice;
   leftSlice->innerSlice(_pivotTmp);
-  leftSlice->simplify();
+  simplify(*leftSlice);
 
   // The outer slice
   rightSlice = slice;
   rightSlice->outerSlice(_pivotTmp);
-  rightSlice->simplify();
+  simplify(*rightSlice);
 
   // Process the smaller one first to preserve memory.
   if (leftSlice->getIdeal().getGeneratorCount() <
@@ -98,4 +117,8 @@ void SliceStrategyCommon::pivotSplit(auto_ptr<Slice> slice,
 
 bool SliceStrategyCommon::getUseIndependence() const {
   return _useIndependence;
+}
+
+bool SliceStrategyCommon::getUseSimplification() const {
+  return _useSimplification;
 }

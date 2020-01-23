@@ -30,7 +30,7 @@
 #include "SliceAlgorithm.h"
 #include "DecomRecorder.h"
 #include "TermGrader.h"
-#include "FrobeniusStrategy.h"
+#include "OptimizeStrategy.h"
 #include "CanonicalCoefTermConsumer.h"
 #include "HilbertStrategy.h"
 #include "IOHandler.h"
@@ -42,6 +42,7 @@
 #include "StatisticsStrategy.h"
 #include "error.h"
 #include "IrreducibleIdealSplitter.h"
+#include "SizeMaxIndepSetAlg.h"
 
 SliceFacade::SliceFacade(const BigIdeal& ideal,
 						 BigTermConsumer* consumer,
@@ -50,6 +51,7 @@ SliceFacade::SliceFacade(const BigIdeal& ideal,
   _printDebug(false), 
   _printStatistics(false),
   _useIndependence(false),
+  _useSimplification(true),
   _isMinimallyGenerated(false),
   _canonicalOutput(false),
   _out(0),
@@ -72,6 +74,7 @@ SliceFacade::SliceFacade(const BigIdeal& ideal,
   _printDebug(false), 
   _printStatistics(false),
   _useIndependence(false),
+  _useSimplification(true),
   _isMinimallyGenerated(false),
   _canonicalOutput(false),
   _out(0),
@@ -95,6 +98,7 @@ SliceFacade::SliceFacade(const BigIdeal& ideal,
   _printDebug(false), 
   _printStatistics(false),
   _useIndependence(false),
+  _useSimplification(true),
   _isMinimallyGenerated(false),
   _canonicalOutput(false),
   _out(out),
@@ -121,6 +125,10 @@ void SliceFacade::setPrintStatistics(bool printStatistics) {
 
 void SliceFacade::setUseIndependence(bool useIndependence) {
   _useIndependence = useIndependence;
+}
+
+void SliceFacade::setUseSimplification(bool useSimplification) {
+  _useSimplification = useSimplification;
 }
 
 void SliceFacade::setIsMinimallyGenerated(bool isMinimallyGenerated) {
@@ -208,6 +216,37 @@ void SliceFacade::computeIrreducibleDecomposition(bool encode) {
 
   if (!encode)
 	getTermConsumer()->doneConsumingList();
+}
+
+mpz_class SliceFacade::computeDimension() {
+  ASSERT(_ideal.get() != 0);
+  ASSERT(_translator.get() != 0);
+
+  if (_ideal->containsIdentity()) {
+	return -1;
+  }
+
+  takeRadical();
+  minimize();
+
+  beginAction("Preparing to compute dimension.");
+
+  vector<mpz_class> v;
+  fill_n(back_inserter(v), _ideal->getVarCount(), -1);
+
+  endAction();
+
+  mpz_class minusCodimension;
+#ifdef DEBUG
+  // Only define hasComponents when DEBUG is defined since otherwise
+  // GCC will warn about hasComponents not being used.
+  bool hasComponents = 
+#endif
+	solveIrreducibleDecompositionProgram
+	(v, minusCodimension, false, true, true);
+  ASSERT(hasComponents);
+
+  return v.size() + minusCodimension;
 }
 
 void SliceFacade::computePrimaryDecomposition() {
@@ -367,6 +406,8 @@ void SliceFacade::computeAlexanderDual() {
   computeAlexanderDual(lcm);
 }
 
+/** @todo This method takes a radical by itself. Use the takeRadical()
+	method instead. */
 void SliceFacade::computeAssociatedPrimes() {
   ASSERT(_ideal.get() != 0);
 
@@ -431,7 +472,8 @@ bool SliceFacade::solveIrreducibleDecompositionProgram
 (const vector<mpz_class>& grading,
  mpz_class& optimalValue,
  bool reportAllSolutions,
- bool useBound) {
+ bool useBoundElimination,
+ bool useBoundSimplification) {
   ASSERT(_split.get() != 0);
   ASSERT(_ideal.get() != 0);
   ASSERT(_translator.get() != 0);
@@ -446,14 +488,17 @@ bool SliceFacade::solveIrreducibleDecompositionProgram
 
   endAction();
 
-  return solveProgram(grading, optimalValue, reportAllSolutions, useBound);
+  return solveProgram
+	(grading, optimalValue, reportAllSolutions,
+	 useBoundElimination, useBoundSimplification);
 }
 
 bool SliceFacade::solveStandardProgram
 (const vector<mpz_class>& grading,
  mpz_class& optimalValue,
  bool reportAllSolutions,
- bool useBound) {
+ bool useBoundElimination,
+ bool useBoundSimplification) {
   ASSERT(_split.get() != 0);
   ASSERT(_ideal.get() != 0);
   ASSERT(_translator.get() != 0);
@@ -462,38 +507,52 @@ bool SliceFacade::solveStandardProgram
   minimize();
 
   _translator->decrement();
-  return solveProgram(grading, optimalValue, reportAllSolutions, useBound);
+  return solveProgram
+	(grading, optimalValue, reportAllSolutions,
+	 useBoundElimination, useBoundSimplification);
 }
 
 bool SliceFacade::solveProgram
 (const vector<mpz_class>& grading,
  mpz_class& optimalValue,
  bool reportAllSolutions,
- bool useBound) {
+ bool useBoundElimination,
+ bool useBoundSimplification) {
   ASSERT(_split.get() != 0);
   ASSERT(_ideal.get() != 0);
   ASSERT(_translator.get() != 0);
   ASSERT(grading.size() == _ideal->getVarCount());
   ASSERT(_isMinimallyGenerated);
 
-  for (size_t var = 0; var < grading.size(); ++var) {
-	if (grading[var] < 0) {
-	  displayNote
-		("The bound optimization has been turned on, but the vector to\n"
-		 "optimize contains negative entries. This case of the optimization\n"
-		 "has not currently been implemented, so am now turning the bound\n"
-		 "optimization off.");
-	  useBound = false;
-	  break;
-	}
+  if (_useIndependence) {
+	displayNote
+	  ("Turning off Independence splits as they are not supported\n"
+	   "for optimization.");
+	_useIndependence = false;
+  }
+
+  if (useBoundSimplification && !useBoundElimination) {
+	displayNote
+	  ("Bound simplification requires using the bound to eliminate\n"
+	   "non-improving slices, which has been turned off. Am now turning\n"
+	   "this on.");
+	useBoundElimination = true;			   
   }
 
   beginAction("Solving optimization program.");
 
-  TermGrader grader(grading, _translator.get());
+  OptimizeStrategy::BoundSetting boundSetting;
+  if (useBoundSimplification) {
+	ASSERT(useBoundElimination);
+	boundSetting = OptimizeStrategy::UseBoundToEliminateAndSimplify;
+  } else if (useBoundElimination)
+	boundSetting = OptimizeStrategy::UseBoundToEliminate;
+  else
+	boundSetting = OptimizeStrategy::DoNotUseBound;
 
-  FrobeniusStrategy strategy
-	(grader, _split.get(), reportAllSolutions, useBound);
+  TermGrader grader(grading, *_translator);
+  OptimizeStrategy strategy
+	(grader, _split.get(), reportAllSolutions, boundSetting);
   runSliceAlgorithmWithOptions(strategy);
 
   endAction();
@@ -539,6 +598,41 @@ void SliceFacade::minimize() {
   endAction();
 }
 
+void SliceFacade::takeRadical() {
+  ASSERT(_ideal.get() != 0);
+  ASSERT(_translator.get() != 0);
+
+  beginAction("Taking radical of ideal.");
+
+  bool skip = false;
+  if (_isMinimallyGenerated) {
+	Term lcm(_ideal->getVarCount());
+	_ideal->getLcm(lcm);
+	if (lcm.isSquareFree())
+	  skip = true;
+  }
+
+  if (!skip) {
+	_translator->setInfinityPowersToZero(*_ideal);
+	_ideal->takeRadicalNoMinimize();
+	_isMinimallyGenerated = false;
+  }
+
+  // Construct translator for zero and one.
+  {
+	BigIdeal zeroOneIdeal(_translator->getNames());
+	zeroOneIdeal.newLastTerm(); // Add term with all exponents zero.
+	zeroOneIdeal.newLastTerm(); // Add term with all exponents one.
+	for (size_t var = 0; var < _ideal->getVarCount(); ++var)
+	  zeroOneIdeal.getLastTermExponentRef(var) = 1;
+
+	Ideal dummy;
+	_translator.reset(new TermTranslator(zeroOneIdeal, dummy, false));
+  }
+
+  endAction();
+}
+
 void SliceFacade::getLcmOfIdeal(vector<mpz_class>& bigLcm) {
   ASSERT(_ideal.get() != 0);
   ASSERT(_translator.get() != 0);
@@ -554,6 +648,7 @@ void SliceFacade::getLcmOfIdeal(vector<mpz_class>& bigLcm) {
 
 void SliceFacade::runSliceAlgorithmWithOptions(SliceStrategy& strategy) {
   strategy.setUseIndependence(_useIndependence);
+  strategy.setUseSimplification(_useSimplification);
 
   SliceStrategy* strategyWithOptions = &strategy;
 

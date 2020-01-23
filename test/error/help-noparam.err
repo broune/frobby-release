@@ -8,12 +8,12 @@ run it by typing `frobby ACTION', where ACTION is one of the following.
  alexdual     - Compute the Alexander dual of the input ideal.
  assoprimes   - Compute the associated primes of the input ideal.
  maxstandard  - Compute the maximal standard monomials of the input ideal.
+ dimension    - Compute the (co)dimension of the input ideal.
  optimize     - Solve optimization problems related to the input ideal.
  transform    - Change the representation of the input ideal.
  ptransform   - Change the representation of the input polynomial.
  intersection - Intersect the input ideals.
  genideal     - Generate a random monomial ideal.
- frobgrob     - Compute Frobenius number using a Grobner basis algorithm.
  frobdyn      - Compute Frobenius number using dynamic programming.
  genfrob      - Generate a random Frobenius problem instance.
  analyze      - Display information about the input ideal.

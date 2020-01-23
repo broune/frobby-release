@@ -37,7 +37,7 @@ auto_ptr<Slice> MsmStrategy::beginComputing(const Ideal& ideal) {
 
   auto_ptr<Slice> slice
 	(new MsmSlice(ideal, Ideal(varCount), sliceMultiply, _consumer));
-  slice->simplify();
+  simplify(*slice);
   return slice;
 }
 
@@ -64,6 +64,7 @@ bool MsmStrategy::debugIsValidSlice(Slice* slice) {
 void MsmStrategy::labelSplit(auto_ptr<MsmSlice> slice,
 							 auto_ptr<Slice>& leftSlice,
 							 auto_ptr<Slice>& rightSlice) {
+  ASSERT(!slice->adjustMultiply());
   ASSERT(!slice->normalize());
   ASSERT(_split != 0);
   size_t var = _split->getLabelSplitVariable(*slice);
@@ -124,10 +125,10 @@ void MsmStrategy::labelSplit(auto_ptr<MsmSlice> slice,
 
   leftSlice = hasLabelSlice;
   if (leftSlice.get() != 0)
-	leftSlice->simplify();
+	simplify(*leftSlice);
 
   rightSlice = slice;
-  rightSlice->simplify();
+  simplify(*rightSlice);
 }
 
 MsmStrategy::MsmStrategy(TermConsumer* consumer,
@@ -274,4 +275,11 @@ void MsmStrategy::getPivot(Term& pivot, Slice& slice) {
   ASSERT(_split->isPivotSplit());
 
   _split->getPivot(pivot, slice);
+}
+
+void MsmStrategy::getPivot(Term& pivot, Slice& slice, const TermGrader& grader) {
+  ASSERT(_split != 0);
+  ASSERT(_split->isPivotSplit());
+
+  _split->getPivot(pivot, slice, grader);
 }

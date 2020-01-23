@@ -17,7 +17,10 @@
 #include "stdinc.h"
 #include "TestAction.h"
 
-#include "../libraryTest/include.cpp"
+#include "error.h"
+#include "test/all.h"
+#include "test/TestSorter.h"
+#include "test/TestRunner.h"
 
 TestAction::TestAction():
   Action
@@ -31,9 +34,23 @@ void TestAction::obtainParameters(vector<Parameter*>& parameters) {
 }
 
 void TestAction::perform() {
-  testFrobbyLibraryInterface();
+  try {
+	TestSorter sorter;
+	GET_TEST_SUITE(root).accept(sorter);
+
+	TestRunner runner;
+	GET_TEST_SUITE(root).accept(runner);
+  } catch (const FrobbyException& e) {
+	fputs(e.what(), stderr);
+  } catch (const AssertException& e) {
+	fputs(e.what(), stderr);
+  }
 }
 
 const char* TestAction::staticGetName() {
   return "test";
+}
+
+bool TestAction::displayAction() const {
+  return false;
 }

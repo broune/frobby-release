@@ -39,7 +39,7 @@ GenerateIdealAction::GenerateIdealAction():
 
   _type
 ("type",
- "The supported types of ideals are random, list, king and knight.",
+ "The supported types of ideals are random, edge, list, king and knight.",
  "random"),
   _variableCount("varCount", "The number of variables.", 3),
   _generatorCount("genCount", "The number of minimal generators.", 5),
@@ -74,6 +74,8 @@ void GenerateIdealAction::perform() {
 							_generatorCount);
   else if (type == "list")
 	generator.generateListIdeal(ideal, _variableCount);
+  else if (type == "edge")
+	generator.generateEdgeIdeal(ideal, _variableCount, _generatorCount);
   else if (type == "king")
 	generator.generateKingChessIdeal(ideal, _variableCount);
   else if (type == "knight")
@@ -83,6 +85,7 @@ void GenerateIdealAction::perform() {
 
   IOFacade ioFacade(_printActions);
   auto_ptr<IOHandler> output = _io.createOutputHandler();
+
   ioFacade.writeIdeal(ideal, output.get(), stdout);
 }
 

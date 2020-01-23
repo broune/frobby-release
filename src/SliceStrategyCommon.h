@@ -27,52 +27,70 @@
 class Slice;
 class SplitStrategy;
 
-// This class adds code to the SliceStrategy base class that is useful
-// for derived classes.
+/** This class adds code to the SliceStrategy base class that is
+ useful for derived classes. The public interface is unchanged.
+*/
 class SliceStrategyCommon : public SliceStrategy {
  public:
   SliceStrategyCommon(const SplitStrategy* splitStrategy);
   virtual ~SliceStrategyCommon();
 
+  virtual bool processIfBaseCase(Slice& slice);
   virtual void freeSlice(auto_ptr<Slice> slice);
 
   virtual void setUseIndependence(bool use);
+  virtual void setUseSimplification(bool use);
 
  protected:
-  // Directly allocate a slice of the correct type using new.
+  /** Simplifies slice and returns true if it changed. */
+  virtual bool simplify(Slice& slice);
+
+  /** Directly allocate a slice of the correct type using new. */
   virtual auto_ptr<Slice> allocateSlice() = 0;
 
-  // Check that this slice is valid for use with this strategy. No
-  // check need be performed unless DEBUG is defined, making it
-  // acceptable to check things using ASSERT. This method should not
-  // be called if DEBUG is not defined.
+  /** Check that this slice is valid for use with this strategy. No
+   check need be performed unless DEBUG is defined, making it
+   acceptable to check things using ASSERT. This method should not be
+   called if DEBUG is not defined.
+  */
   virtual bool debugIsValidSlice(Slice* slice) = 0;
 
-  // Returns a slice from the cache that freeSlice adds to, or
-  // allocate a new one using allocateSlice. This method should be
-  // used in place of allocating new slices directly.
+  /** Returns a slice from the cache that freeSlice adds to, or
+   allocate a new one using allocateSlice. This method should be
+   used in place of allocating new slices directly.
+  */
   auto_ptr<Slice> newSlice();
 
-  // Takes over ownership of slice and populates leftSlice and
-  // rightSlice with simplified sub-slices. Uses the pivot gotten
-  // through getPivot.
+  /** Takes over ownership of slice and populates leftSlice and
+   rightSlice with simplified sub-slices. Uses the pivot gotten
+   through getPivot.
+  */
   virtual void pivotSplit(auto_ptr<Slice> slice,
 						  auto_ptr<Slice>& leftSlice,
 						  auto_ptr<Slice>& rightSlice);
 
-  // Used by pivotSplit to obtain a pivot.
+  /** Used by pivotSplit to obtain a pivot. */
   virtual void getPivot(Term& pivot, Slice& slice) = 0;
 
+  /** Returns true if independence splits should be performed when
+   possible.
+  */
   bool getUseIndependence() const;
+
+  /** Returns true if slices should be simplified. */
+  bool getUseSimplification() const;
 
   const SplitStrategy* _split;
 
  private:
   bool _useIndependence;
+  bool _useSimplification;
 
-  // This is the cache maintained through newSlice and freeSlice. It
-  // would make more sense with a stack, but that class has
-  // (surprisingly) proven to have too high overhead.
+  /** This is the cache maintained through newSlice and freeSlice. It
+   would make more sense with a stack, but that class has
+   (surprisingly!) proven to have too high overhead, even when it seems
+   to be implemented in terms of vector.
+  */
   vector<Slice*> _sliceCache;
 
   Term _pivotTmp;

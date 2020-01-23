@@ -22,6 +22,7 @@
 #include "SliceFacade.h"
 #include "BigTermRecorder.h"
 #include "Scanner.h"
+#include "error.h"
 
 FrobeniusAction::FrobeniusAction():
   Action
@@ -40,7 +41,7 @@ FrobeniusAction::FrobeniusAction():
  "at www.broune.com for more details.",
  false),
   
-  _sliceParams(true),
+  _sliceParams(true, false),
   _displaySolution
 ("vector",
  "Display the vector that achieves the optimal value.",
@@ -56,6 +57,11 @@ void FrobeniusAction::obtainParameters(vector<Parameter*>& parameters) {
 }
 
 void FrobeniusAction::perform() {
+  displayNote
+	("The action frobgrob is DEPRECATED, and will be removed in a future "
+	 "release of Frobby. Use the action optimize with options "
+	 "-chopFirstAndSubtract and -maxStandard instead to get the same effect.");
+
   _sliceParams.validateSplit(true, true);
 
   vector<mpz_class> instance;
@@ -75,7 +81,9 @@ void FrobeniusAction::perform() {
   _sliceParams.apply(facade);
   mpz_class dummy;
   facade.solveStandardProgram
-	(shiftedDegrees, dummy, false, _sliceParams.getUseBound());
+	(shiftedDegrees, dummy, false,
+	 _sliceParams.getUseBoundElimination(),
+	 _sliceParams.getUseBoundSimplification());
 
   BigIdeal maxSolution = *(recorder.releaseIdeal());
 
@@ -98,4 +106,8 @@ void FrobeniusAction::perform() {
 
 const char* FrobeniusAction::staticGetName() {
   return "frobgrob";
+}
+
+bool FrobeniusAction::displayAction() const {
+  return false;
 }

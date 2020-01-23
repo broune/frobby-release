@@ -54,6 +54,10 @@ ifndef CXX
   CXX      = "g++"
 endif
 
+ifndef BIN_INSTALL_DIR
+  BIN_INSTALL_DIR = "/usr/bin/"
+endif
+
 cflags = $(CFLAGS) $(CPPFLAGS) -Wall -ansi -pedantic -I $(GMP_INC_DIR)	\
          -Wno-uninitialized -Wno-unused-parameter
 program = frobby
@@ -193,7 +197,27 @@ ifeq ($(MODE), analysis)
 	  echo > $(outdir)$(subst src/,,$(<:.cpp=.o))
 endif
 
+# Installation
+install:
+	install bin/frobby $(BIN_INSTALL_DIR)
+
 # ***** Documentation
+
+# We need to run latex three times to make sure that references are done
+# properly in the output.
+doc: docPs docPdf
+docPs:
+	rm -rf bin/doc
+	mkdir bin/doc
+	for i in 1 2 3; do latex doc/manual.tex -output-directory=bin/doc/; done
+	cd bin; dvips doc/manual.dvi
+docPdf:
+	rm -rf bin/doc
+	mkdir bin/doc
+	for i in 1 2 3; do pdflatex doc/manual.tex -output-directory=bin/doc/; done
+	mv bin/doc/manual.pdf bin
+docDviOnce: # Useful to view changes when writing the manual
+	latex doc/manual.tex -output-directory=bin/doc
 
 # It may seem wasteful to run doxygen three times to generate three
 # kinds of output. However, the latex output for creating a pdf file
@@ -203,17 +227,15 @@ endif
 develDoc: develDocHtml develDocPdf develDocPs
 develDocHtml:
 	cat doc/doxygen.conf doc/doxHtml|doxygen -
-	cat bin/doc/warningLog
 develDocPdf:
-	rm -rf bin/doc/latexPdf
+	rm -rf bin/develDoc/latexPdf bin/develDoc/warningLog
 	cat doc/doxygen.conf doc/doxPdf|doxygen -
-	cd bin/doc/latexPdf/; make pdf; mv refman.pdf ../frobbyManual.pdf
-	cat bin/doc/warningLog
+	cd bin/develDoc/latexPdf; for f in `ls *.eps`; do epstopdf $$f; done # Cygwin fix
+	cd bin/develDoc/latexPdf/; make refman.pdf; mv refman.pdf ../develDoc.pdf
 develDocPs:
-	rm -rf bin/doc/latexPs
+	rm -rf bin/develDoc/latexPs bin/develDoc/warningLog
 	cat doc/doxygen.conf doc/doxPs|doxygen -
-	cd bin/doc/latexPs/; make ps; mv refman.ps ../frobbyManual.ps
-	cat bin/doc/warningLog
+	cd bin/develDoc/latexPs/; make refman.ps; mv refman.ps ../develDoc.ps
 
 # ***** Dependency management
 depend:
@@ -223,10 +245,15 @@ depend:
 clean: tidy
 	rm -rf bin
 
+# ***** Miscellaneous
+
 tidy:
 	find .|grep -x ".*~\|.*/\#.*\#|.*\.stackdump\|gmon\.out\|.*\.orig\|.*/core\|core"|xargs rm -f
 
-# ***** Mercurial
+# Convert any Windows-style whitespace into Unix-style whitespace. This is
+# a good thing to do before a commit if developing on e.g. Cygwin.
+dos2unix:
+	for f in `find src/ test/ scr/ libraryTest/ -type f`; do dos2unix $$f; done
 
 commit: test
 	echo
@@ -249,7 +276,7 @@ ifndef VER
 endif
 	rm -fr frobby_v$(VER).tar.gz frobby_v$(VER)
 	mkdir frobby_v$(VER)
-	cp -r frobgrob COPYING Makefile src test example frobby_v$(VER)
+	cp -r frobgrob COPYING Makefile src test libraryTest frobby_v$(VER)
 	mkdir frobby_v$(VER)/4ti2
 	tar --create --gzip --file=frobby_v$(VER).tar.gz frobby_v$(VER)/
 	rm -fr frobby_v$(VER)	
